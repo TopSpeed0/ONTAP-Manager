@@ -2,12 +2,27 @@
 .SYNOPSIS
     Create or update an encrypted credential file.
 .DESCRIPTION
-    Encrypts a password using AES-256 key and stores it as a file.
+    Encrypts a password using AES-256 key and stores it as a .cred file.
     Same pattern as HCI_Manager\New-AdminCredential.ps1.
-    The AES key is auto-generated on first run.
+    The AES key (credentials\aes.key) is auto-generated on first run.
+    If the target .cred file already exists, prompts for confirmation
+    unless -Force is specified.
+.PARAMETER Name
+    Name for the credential. Saved as <Name>.cred in the credentials folder.
+.PARAMETER Force
+    Overwrite an existing .cred file without prompting for confirmation.
 .EXAMPLE
-    .\New-Credential.ps1 -Name "ontap_s3"
-    .\New-Credential.ps1 -Name "ontap_s3" -Force
+    .\credentials\New-Credential.ps1 -Name "ontap_s3"
+    # Prompts for password interactively and saves credentials\ontap_s3.cred.
+.EXAMPLE
+    .\credentials\New-Credential.ps1 -Name "ontap_s3" -Force
+    # Overwrites ontap_s3.cred without asking.
+.NOTES
+    Files produced:
+      credentials\aes.key   — shared AES-256 key (created once, reused)
+      credentials\<Name>.cred — encrypted password file
+    Both are excluded from git via credentials\.gitignore.
+    Retrieve stored passwords with Get-Credential.ps1.
 #>
 param(
     [Parameter(Mandatory)]

@@ -9,16 +9,32 @@
     "SRC": "",
     "DST": ""
   },
+  "ONTAP_ROUser": "",
+  "S3_Config": {
+    "Clusters": {
+      "<cluster-alias>": {
+        "Vserver": "<s3-svm-name>",
+        "S3User": "<s3-object-user>",
+        "OntapUsername": "admin",
+        "CredentialName": "<cred-file-name>",
+        "VaultFile": "credentials/<vault-file>.yml"
+      }
+    }
+  },
+  "DFS_Config": {
+    "<cluster-alias>": {
+      "Vserver": "<nas-svm-name>",
+      "CifsServer": "<cifs-netbios-name>",
+      "CifsAlias": "<netbios-alias>",
+      "DfsShare": "<dfs-share-name>",
+      "DfsPath": "/<dfs-junction-path>",
+      "Domain": "<ad-domain>"
+    }
+  },
   "Personal_modules": [
     "c:\\users\\<username>\\OneDrive\\modules1.psm1",
     "c:\\users\\<username>\\OneDrive\\modules2.psm1"
     ],
-  "ONTAP_Credential": {
-    "JenkinsCredentialId": "",
-    "EnvVarUser": "NETAPP_USER",
-    "EnvVarPass": "NETAPP_PASS"
-  },
-
   "ONTAP_Clusters": [
     {
       "ClusterName": "",

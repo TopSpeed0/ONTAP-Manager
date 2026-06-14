@@ -359,13 +359,41 @@ $resp = Invoke-RestMethod -Method POST -Uri "https://<cluster>/api/protocols/s3/
 
 Playbooks at `ansible/s3-bucket-provision/` for automated S3 bucket provisioning.
 
+### PowerShell Wrapper (Recommended)
+
+`Invoke-S3Provision.ps1` loads cluster details from `config.json` (`S3_Config` section), pulls credentials from the credential store, and runs the generic playbook via WSL. Only `-Cluster` and `-BucketName` are mandatory:
+
+```powershell
+# Minimal — all defaults from config.json
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 -Cluster <cluster-alias> -BucketName my-bucket
+
+# Vault mode — vault_key.cred + VaultFile from config
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 -Cluster <cluster-alias> -BucketName my-bucket -UseVault
+
+# Different cluster — also config-driven
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 -Cluster <cluster-alias-2> -BucketName data-lake -UseVault
+
+# Override any config default
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 -Cluster <cluster-alias-2> -BucketName data-lake -S3User custom-user
+
+# Dry-run
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 -Cluster <cluster-alias> -BucketName test -DryRun
+```
+
+Config-driven defaults (from `config.json` → `S3_Config.Clusters.<alias>`):
+- `Vserver` — S3 SVM name
+- `S3User` — S3 object user for bucket policy
+- `OntapUsername` — ONTAP login user (default: `admin`)
+- `CredentialName` — `.cred` file name for direct auth
+- `VaultFile` — vault credentials YAML for vault auth
+
 ### Playbooks
 
 | Playbook | Purpose | Credentials |
 |----------|---------|-------------|
 | `provision_s3_bucket_generic.yml` | **Any cluster/SVM** — fully parameterized | Via `-e @vault_file` or `-e ontap_password=...` |
 | `provision_s3_bucket_admin.yml` | <cluster-name> cluster admin | `credentials/vault_credentials_<cluster-name>_admin.yml` |
-| `provision_s3_bucket_dev.yml` | <cluster-name> SVM dev user | `credentials/vault_credentials_<cluster-name>_sm_s3_dev.yml` |
+| `provision_s3_bucket_dev.yml` | <cluster-name> SVM dev user | `credentials/vault_credentials_<cluster-name>_<s3-user>.yml` |
 
 ### Prerequisites
 ```bash
@@ -394,7 +422,7 @@ wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c "export PATH=/usr/local/bin:/u
 | `ontap_vserver` | SVM name | `<s3-svm>`, `<s3-svm>` |
 | `ontap_password` | ONTAP REST API password | via vault file or `-e` |
 | `bucket_name` | Bucket name | `devops-artifacts` |
-| `s3_user` | S3 object store user for bucket policy | `<s3-user>`, `sm_s3_dev` |
+| `s3_user` | S3 object store user for bucket policy | `<s3-user>` |
 | `bucket_size` | Size (human-readable, default 100GB) | `200GB`, `1TB` |
 
 ### Credential Management
@@ -404,7 +432,7 @@ wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c "export PATH=/usr/local/bin:/u
 credentials/
 ├── vault_credentials_<cluster>_admin.yml         # <cluster-name> admin
 ├── vault_credentials_<cluster-name>_admin.yml   # <cluster-name> admin
-├── vault_credentials_<cluster-name>_sm_s3_dev.yml # <cluster-name> SVM user
+├── vault_credentials_<cluster-name>_<s3-user>.yml # <cluster-name> SVM user
 └── vault_template.yml                      # Template
 ```
 
@@ -444,7 +472,7 @@ Reference: <cluster-name>'s `<s3-svm>` does this correctly — S3 policy has NO 
 
 #### ONTAP admin user vs S3 object store user
 - **ONTAP admin** (`admin`, `svm_s3_dev`): authenticates via REST API to create/manage buckets
-- **S3 object store user** (`<s3-user>`, `sm_s3_dev`): referenced by name in bucket policies, authenticates via access key + secret key from S3 clients
+- **S3 object store user** (`<s3-user>`): referenced by name in bucket policies, authenticates via access key + secret key from S3 clients
 
 The playbook uses ONTAP admin credentials and only writes the S3 username into the bucket policy. No S3 access keys are needed.
 

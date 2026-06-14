@@ -82,24 +82,8 @@ function global:Get-OntapTargetClusters {
     return @($global:ONTAP_Clusters)
 }
 
-# --- ONTAP credential (Jenkins env vars or interactive fallback) ------------
-# When Jenkins injects NETAPP_USER / NETAPP_PASS via withCredentials, build a
-# PSCredential automatically.  On a dev machine the env vars won't exist, so
-# scripts fall back to interactive Get-Credential.
-$global:ONTAP_CredentialConfig = $global:Config.ONTAP_Credential
-$global:ONTAP_Credential = $null
-
-$_envUser = [System.Environment]::GetEnvironmentVariable($global:ONTAP_CredentialConfig.EnvVarUser)
-$_envPass = [System.Environment]::GetEnvironmentVariable($global:ONTAP_CredentialConfig.EnvVarPass)
-
-if (![string]::IsNullOrWhiteSpace($_envUser) -and ![string]::IsNullOrWhiteSpace($_envPass)) {
-    $secPass = ConvertTo-SecureString $_envPass -AsPlainText -Force
-    $global:ONTAP_Credential = New-Object System.Management.Automation.PSCredential($_envUser, $secPass)
-    Write-Host "INFO: ONTAP credential loaded from Jenkins env vars ($($global:ONTAP_CredentialConfig.EnvVarUser))" -ForegroundColor Green
-}
-else {
-    Write-Host "INFO: Jenkins ONTAP env vars not set — will fall back to interactive Get-Credential when needed" -ForegroundColor Yellow
-}
+# --- ONTAP read-only user (for testing / RO operations) ---------------------
+$global:ONTAP_ROUser = $global:Config.ONTAP_ROUser
 
 # --- Generic CSV helper (must be defined before per-cluster wrappers) -------
 function global:Invoke-OntapCsv {

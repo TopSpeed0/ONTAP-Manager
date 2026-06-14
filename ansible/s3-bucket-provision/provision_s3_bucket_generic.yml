@@ -8,11 +8,11 @@
 #   # With vault file:
 #   ansible-playbook provision_s3_bucket_generic.yml \
 #     -e @vault_file.yml --vault-password-file ~/.vault_pass \
-#     -e "ontap_hostname=<cluster-name> ontap_vserver=<s3-svm> bucket_name=my-bucket s3_user=sm_s3_dev"
+#     -e "ontap_hostname=<cluster-name> ontap_vserver=<s3-svm> bucket_name=my-bucket s3_user=<s3-user>"
 #
 #   # With direct password:
 #   ansible-playbook provision_s3_bucket_generic.yml \
-#     -e "ontap_hostname=<cluster-name> ontap_vserver=<s3-svm> ontap_password=SECRET bucket_name=my-bucket s3_user=jfrog-s3"
+#     -e "ontap_hostname=<cluster-name> ontap_vserver=<s3-svm> ontap_password=SECRET bucket_name=my-bucket s3_user=<s3-user>"
 #
 #   # With custom size (human-readable):
 #   ansible-playbook provision_s3_bucket_generic.yml \
@@ -23,7 +23,7 @@
 #   ontap_vserver  - SVM name (e.g., <s3-svm>, <s3-svm>)
 #   ontap_password - ONTAP password (via -e, vault file, or environment)
 #   bucket_name    - Name of the S3 bucket to create
-#   s3_user        - S3 user to grant bucket access (e.g., jfrog-s3, sm_s3_dev)
+#   s3_user        - S3 user to grant bucket access (e.g., <s3-user>)
 #
 # Optional extra vars:
 #   ontap_username      - ONTAP user (default: admin)

@@ -79,10 +79,12 @@ profile1.ps1                 # Workspace profile — modules + dot-sources Load-
   skills/                    # Domain skills loaded by the agent
 ansible/
   s3-bucket-provision/       # Ansible playbook for S3 bucket provisioning
-credentials/                 # AES-encrypted credential store (aes.key + *.cred)
+credentials/                 # AES-encrypted credential store
+  New-Credential.ps1         # Store a password (AES-256 encrypt → .cred)
+  Get-Credential.ps1         # Retrieve a stored password (plaintext or SecureString)
 scripts/
   disk/                      # SAS/shelf diagnostics (sas-diag.ps1)
-  ndmp-copy/                 # NDMP cross-cluster file copy
+  ndmp-copy/                 # NDMP cross-cluster file copy (Ndmp_Copy.ps1, ndmp-copy.bat)
   quota/                     # Qtree quota manager
   reports/                   # NI DR reports (SSH + ZAPI versions)
   snapmirror/                # SnapMirror monitoring
@@ -98,6 +100,7 @@ Each fer under [.github/skills/](.github/skills/) contains a `SKILL.md` with sco
 - [dfs-management](.github/skills/dfs-management/) — DFS namespace / CIFS widelink resolution
 - [iscsi-management](.github/skills/iscsi-management/) — iSCSI sessions, connections, igroups
 - [network-management](.github/skills/network-management/) — LIFs, broadcast domains, routes, VLANs
+- [ndmp-copy](.github/skills/ndmp-copy/) — NDMP cross-cluster file copy (prerequisites, procedure, config)
 - [ontap-cluster-info](.github/skills/ontap-cluster-info/) — Cluster reconnaissance & inventory
 - [pdf-knowledge-import](.github/skills/pdf-knowledge-import/) — Extract PDF docs into skill references
 - [s3-management](.github/skills/s3-management/) — ONTAP S3 servers, buckets, users, policies
@@ -147,7 +150,9 @@ Interactive qtree quota viewer and resizer. Auto-connects to the first `MainClus
 
 ### NDMP Copy (`scripts/ndmp-copy/Ndmp_Copy.ps1`)
 
-Config-driven cross-cluster file copy via NDMP. All parameters default from `NDMP_Config` in `config.json`.
+Config-driven cross-cluster (or same-cluster) file copy via NDMP. All parameters default from `NDMP_Config` in `config.json`. Requires `NetApp.ONTAP` module. A batch wrapper (`ndmp-copy.bat`) is also available for quick command-line use.
+
+See [ndmp-copy skill](.github/skills/ndmp-copy/SKILL.md) for prerequisites, NDMP enable steps, and detailed procedure.
 
 ```powershell
 # Zero-config — uses SrcCluster, DstCluster, SRC, DST from config.json:
@@ -155,6 +160,9 @@ Config-driven cross-cluster file copy via NDMP. All parameters default from `NDM
 
 # Override with explicit params:
 .\scripts\ndmp-copy\Ndmp_Copy.ps1 -SrcCluster SrcAlias -DstCluster DstAlias -SourcePath "/src_svm/src_vol/path" -DestPath "/dst_svm/dst_vol/path"
+
+# Batch wrapper (positional args or zero-config):
+.\scripts\ndmp-copy\ndmp-copy.bat
 ```
 
 ### Biggest Snapshots (`scripts/snapshots/Get-BiggestSnapshot.ps1`)
@@ -163,6 +171,22 @@ Queries all clusters via SSH and reports the top 20 largest snapshots.
 
 ```powershell
 .\scripts\snapshots\Get-BiggestSnapshot.ps1
+```
+
+### Test ONTAP User (`scripts/testing/Test-NetappROUser.ps1`)
+
+Tests ONTAP user credentials against all clusters defined in `config.json`. Loads the password from the credential store (`credentials/<UserName>.cred`) if available, otherwise prompts interactively. Reports a table with Cluster, Status (OK/FAILED), Version, and Name.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `-UserName` | string | No | `ONTAP_ROUser` from config.json | The ONTAP user name to test |
+
+```powershell
+# Test the default read-only user from config.json
+.\scripts\testing\Test-NetappROUser.ps1
+
+# Test a specific user (prompts for password if no .cred file)
+.\scripts\testing\Test-NetappROUser.ps1 -UserName admin
 ```
 
 ### SAS Diagnostics (`scripts/disk/sas-diag.ps1`)
@@ -221,23 +245,152 @@ Point the agent to your local scripts folder in `.github/copilot-instructions.md
 ## Credential Store
 
 Passwords are stored as AES-256 encrypted files in `credentials/` (same pattern as HCI_Manager).
+Files `aes.key` and `*.cred` are `.gitignore`d.
+
+### `New-Credential.ps1` — Store a Password
+
+Encrypts a password using AES-256 and saves it as a `.cred` file. Auto-generates `aes.key` on first use.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `-Name` | string | Yes | — | Name for the credential file (saved as `<Name>.cred`) |
+| `-Force` | switch | No | — | Overwrite existing `.cred` file without prompting |
 
 ```powershell
-# One-time: store a password
-.\credentials\-Credential.ps1 -Name "ontap_s3"
+# One-time: store a password (prompts interactively)
+.\credentials\New-Credential.ps1 -Name "ontap_s3"
 
-# Retrieve plaintext (for Ansible, CLI, etc.)
-$pwd = & .\credentials\Get-Credential.ps1 -Name "ontap_s3"
+# Overwrite an existing credential
+.\credentials\New-Credential.ps1 -Name "ontap_s3" -Force
 ```
 
-Files `aes.key` and `*.cred` are `.gitignore`d.
+### `Get-Credential.ps1` — Retrieve a Password
+
+Decrypts a `.cred` file using the shared AES key. Returns plaintext by default.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `-Name` | string | Yes | — | Name of the credential file to decrypt |
+| `-AsSecureString` | switch | No | — | Return `[SecureString]` instead of plaintext |
+
+```powershell
+# Retrieve plaintext (for Ansible, CLI, env vars)
+$pwd = & .\credentials\Get-Credential.ps1 -Name "ontap_s3"
+
+# Retrieve as SecureString (for PSCredential workflows)
+$sec = & .\credentials\Get-Credential.ps1 -Name "ontap_s3" -AsSecureString
+```
 
 ## Ansible
 
 Ansible CLI doesn't run natively on Windows. Use **WSL** (`wsl -d Ubuntu-22.04`, Ansible at `~/.local/bin/`).
 
-```powershell
-# S3 bucket provisioning
-$pwd = & .\credentials\Get-Credential.ps1 -Name "ontap_s3"
-ansible-playbook ansible/s3-bucket-provision/provision_s3_bucket.yml -e "ontap_password=$pwd bucket_name=my-bucket"
+### S3 Bucket Provisioning (`ansible/s3-bucket-provision/`)
+
+Automates S3 bucket creation on ONTAP using the `netapp.ontap` Ansible collection.
+
+**Playbooks:**
+
+| Playbook | Description |
+|----------|-------------|
+| `provision_s3_bucket_generic.yml` | Generic — works with any cluster/SVM (pass connection vars via `-e`) |
+| `provision_s3_bucket_admin.yml` | Site-specific, cluster admin credentials (gitignored) |
+| `provision_s3_bucket_dev.yml` | Site-specific, SVM dev user credentials (gitignored) |
+
+**Quick start:**
+
+```bash
+# Install prerequisites
+pip install ansible netapp-lib
+ansible-galaxy collection install netapp.ontap
+
+# Set vault password (one-time)
+echo 'YOUR_VAULT_PASSWORD' > ~/.vault_pass && chmod 600 ~/.vault_pass
+
+# Provision a bucket (generic playbook — pass all connection params)
+ansible-playbook ansible/s3-bucket-provision/provision_s3_bucket_generic.yml \
+  -e "ontap_hostname=<cluster-name> ontap_vserver=<s3-svm> ontap_password=<password> bucket_name=my-bucket"
 ```
+
+**From PowerShell (wrapper — recommended):**
+
+`Invoke-S3Provision.ps1` resolves cluster hostname, SVM, S3 user, credentials, and vault file from `config.json` (`S3_Config` section) automatically. Only `-Cluster` and `-BucketName` are mandatory when `S3_Config` is defined:
+
+```powershell
+# Minimal — everything from config.json S3_Config
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 `
+  -Cluster <cluster-alias> -BucketName my-bucket
+
+# Another cluster — all details from config
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 `
+  -Cluster <cluster-alias-2> -BucketName data-lake
+
+# Vault mode — uses vault_key.cred + vault credentials file from config
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 `
+  -Cluster <cluster-alias> -BucketName my-bucket -UseVault
+
+# Override S3 user from config
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 `
+  -Cluster <cluster-alias-2> -BucketName data-lake -S3User custom-user
+
+# Custom size
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 `
+  -Cluster <cluster-alias> -BucketName big-bucket -BucketSize 500GB
+
+# Dry-run — shows the ansible-playbook command without executing
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 `
+  -Cluster <cluster-alias> -BucketName test -DryRun
+```
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `-Cluster` | **Yes** | — | Cluster alias or name from `config.json` |
+| `-BucketName` | **Yes** | — | S3 bucket name |
+| `-Vserver` | No | from `S3_Config` | SVM name hosting the S3 server |
+| `-S3User` | No | from `S3_Config` | S3 user granted access via bucket policy |
+| `-CredentialName` | No | from `S3_Config` | Name of `.cred` file in `credentials/` |
+| `-UseVault` | No | — | Use vault-based auth instead of direct creds |
+| `-VaultFile` | No | from `S3_Config` | Vault credentials YAML (relative to playbook dir) |
+| `-OntapUsername` | No | `admin` | ONTAP login user |
+| `-BucketSize` | No | `100GB` | Human-readable size (min ~95 GB) |
+| `-DryRun` | No | — | Show command without executing |
+
+`config.json` S3_Config section maps per-cluster defaults:
+
+```json
+"S3_Config": {
+  "Clusters": {
+    "<cluster-alias>": {
+      "Vserver": "<s3-svm-name>",
+      "S3User": "<s3-object-user>",
+      "OntapUsername": "admin",
+      "CredentialName": "<cred-file-name>",
+      "VaultFile": "credentials/<vault-file>.yml"
+    }
+  }
+}
+```
+
+**From WSL directly (manual):**
+
+```powershell
+$pw = & .\credentials\Get-Credential.ps1 -Name "ontap_s3"
+wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c "export PATH=/usr/local/bin:/usr/bin:/bin:`$HOME/.local/bin; cd '<workspace-wsl-path>/ansible/s3-bucket-provision'; ansible-playbook provision_s3_bucket_generic.yml -e 'ontap_hostname=<cluster-name> ontap_vserver=<s3-svm> ontap_password=$pw bucket_name=my-bucket'"
+```
+
+**Variables:**
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `bucket_name` | **Yes** | — | S3 bucket name |
+| `bucket_size` | No | `107374182400` (100 GB) | Bucket size in bytes (min ~95 GB) |
+| `bucket_comment` | No | `"Provisioned by Ansible DevOps automation"` | Bucket description |
+| `s3_user` | No | `<s3-user>` | S3 user granted access via bucket policy |
+| `ontap_hostname` | **Yes** | — | Cluster or SVM management hostname/IP |
+| `ontap_vserver` | **Yes** | — | SVM name |
+| `ontap_username` | No | `admin` | ONTAP user |
+| `ontap_password` | **Yes** | — | ONTAP password (or use vault) |
+
+Vault credentials are stored in `ansible/s3-bucket-provision/credentials/` (encrypted with `ansible-vault`, gitignored). The vault master password is stored in both WSL (`~/.vault_pass`) and the PowerShell credential store (`credentials/vault_key.cred`).
+
+**Troubleshooting tip:** If Ansible returns `400 Bad Request` against an SVM LIF, ensure the LIF's service policy does NOT include `data-s3-server` — S3 hijacks port 443 and breaks REST API. Use separate LIFs for S3 data and management.

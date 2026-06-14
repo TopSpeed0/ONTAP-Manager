@@ -16,6 +16,14 @@ PDF/*.pdf
 # Ansible Vault encrypted credential files (keep vault_template.yml tracked)
 ansible/s3-bucket-provision/credentials/vault_credentials*.yml
 
+# Site-specific Ansible playbooks (contain real hostnames/IPs — generic version is tracked)
+ansible/s3-bucket-provision/provision_s3_bucket.yml
+ansible/s3-bucket-provision/provision_s3_bucket_admin.yml
+ansible/s3-bucket-provision/provision_s3_bucket_dev.yml
+ansible/s3-bucket-provision/README.md
+ansible/s3-bucket-provision/_provision_vars.json
+ansible/s3-bucket-provision/_vault_pass.tmp
+
 # Credential store — only scripts are tracked, not keys or encrypted files
 credentials/aes.key
 credentials/*.cred

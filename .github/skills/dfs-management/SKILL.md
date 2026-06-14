@@ -1,13 +1,13 @@
 ---
 name: dfs-management
 description: 'Manage and resolve ONTAP DFS namespace paths and CIFS widelinks (symlinks). Use when: find DFS path, resolve DFS share, CIFS widelink lookup, find volume for DFS namespace, map \\server\dfs\link to NetApp volume/qtree, Find-DFSPath, Get-DFSNameSpaceRoot, DFS symlink, widelink troubleshooting.'
-argument-hint: 'Specify the UNC path to resolve (e.g. \\il\dfs\Mng) and the vserver'
+argument-hint: 'Specify the UNC path to resolve (e.g. \\<cifs-alias>\<dfs-share>\<link>) and the vserver'
 ---
 
 # ONTAP DFS Namespace & CIFS Widelink Management
 
 ## When to Use
-- Resolve a DFS UNC path (e.g. `\\il\dfs\Mng`) to its underlying NetApp volume and qtree
+- Resolve a DFS UNC path (e.g. `\\<cifs-alias>\<dfs-share>\<link>`) to its underlying NetApp volume and qtree
 - Look up CIFS widelink (symlink) configuration on an SVM
 - Find which aggregate/node hosts a DFS-linked share
 - Troubleshoot DFS namespace path issues
@@ -17,8 +17,8 @@ argument-hint: 'Specify the UNC path to resolve (e.g. \\il\dfs\Mng) and the vser
 ### DFS on NetApp: How it works
 NetApp implements DFS namespace links as **CIFS widelinks** (Unix-style symlinks on the CIFS layer):
 - The DFS namespace root (e.g. `dfs`) is a regular CIFS share pointing to a junction path
-- Each DFS link (e.g. `Mng`) is a **CIFS widelink** — configured via `Get-NcCifsSymlink` / `vserver cifs symlinks`
-- The widelink's `UnixPath` (e.g. `/Mng/`) maps to a `ShareName` (e.g. `MNG$`) on the target SVM
+- Each DFS link (e.g. `Sales`) is a **CIFS widelink** — configured via `Get-NcCifsSymlink` / `vserver cifs symlinks`
+- The widelink's `UnixPath` (e.g. `/Sales/`) maps to a `ShareName` (e.g. `SALES$`) on the target SVM
 - That target share points to the actual qtree/volume
 
 ### UNC Path Format Supported
@@ -35,10 +35,28 @@ vserver cifs symlinks show -vserver <svm> -unix-path /<link>/
 vserver cifs share show -vserver <svm> -share-name <share>
 ```
 
+## Configuration
+
+DFS settings are defined in `config.json` under `DFS_Config` (see `config.template.json` for schema):
+
+```json
+"DFS_Config": {
+  "<cluster-alias>": {
+    "Vserver": "<nas-svm-name>",
+    "CifsServer": "<cifs-netbios-name>",
+    "CifsAlias": "<netbios-alias>",
+    "DfsShare": "<dfs-share-name>",
+    "DfsPath": "/<dfs-junction-path>",
+    "Domain": "<ad-domain>"
+  }
+}
+```
+
+The module path is listed in `config.json` under `Personal_modules` and auto-imported by `Load-Config.ps1`.
+
 ## Existing Script
 
-The function is implemented in:
-`<path-to>/Get-DFSNameSpaceRoot.psm1`
+The function is implemented in the `Get-DFSNameSpaceRoot.psm1` module (path loaded from `Personal_modules` in `config.json`).
 
 ### Aliases available after `Import-Module`
 | Alias | Function |
@@ -50,10 +68,11 @@ The function is implemented in:
 
 ### Usage
 ```powershell
-Import-Module "<path-to>/Get-DFSNameSpaceRoot.psm1"
+# Module is auto-imported by Load-Config.ps1, or manually:
+Import-Module "<path-from-Personal_modules>/Get-DFSNameSpaceRoot.psm1"
 
 # Resolve a DFS path
-Find-DFSPath -share '\\il\dfs\Mng' -Vserver <svm-name>
+Find-DFSPath -share '\\<cifs-alias>\<dfs-share>\<link>' -Vserver <svm-name>
 
 # Output includes:
 # Share, Volume, UnixPath, vserver, LINK, QTREE, CifsServer, SharePath, JunctionPath, Aggregate, Node
@@ -62,11 +81,11 @@ Find-DFSPath -share '\\il\dfs\Mng' -Vserver <svm-name>
 ### Output Fields
 | Field | Description |
 |-------|-------------|
-| `Share` | Target CIFS share name (e.g. `MNG$`) |
+| `Share` | Target CIFS share name (e.g. `SALES$`) |
 | `Volume` | NetApp volume hosting the data |
-| `UnixPath` | Widelink unix path (e.g. `/Mng/`) |
+| `UnixPath` | Widelink unix path (e.g. `/Sales/`) |
 | `vserver` | SVM owning the volume |
-| `LINK` | Full ONTAP path to the DFS link (e.g. `/vol/dfs/Mng`) |
+| `LINK` | Full ONTAP path to the DFS link (e.g. `/vol/<dfs-volume>/<link>`) |
 | `QTREE` | Qtree name within the volume |
 | `CifsServer` | CIFS server name (from `Get-NcCifsServer`) |
 | `SharePath` | Full path inside the target share |
@@ -98,8 +117,8 @@ $share = $share.split('\\').split('\')
 
 ### Resolve a DFS UNC path
 ```powershell
-Import-Module "<path-to>/Get-DFSNameSpaceRoot.psm1" -Force
-Find-DFSPath -share '\\il\dfs\<LinkName>' -Vserver <svm-name>
+Import-Module "<path-from-Personal_modules>/Get-DFSNameSpaceRoot.psm1" -Force
+Find-DFSPath -share '\\<cifs-alias>\<dfs-share>\<LinkName>' -Vserver <svm-name>
 ```
 
 ### List all widelinks on an SVM (ONTAP CLI)
@@ -109,5 +128,5 @@ Get-<Prefix>Csv -Command "vserver cifs symlinks show -vserver <svm-name> -fields
 
 ### Look up a specific widelink (PowerShell toolkit)
 ```powershell
-Get-NcCifsSymlink -UnixPath '/Mng/' -VserverContext <svm-name>
+Get-NcCifsSymlink -UnixPath '/<link>/' -VserverContext <svm-name>
 ```

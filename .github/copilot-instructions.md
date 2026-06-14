@@ -8,7 +8,9 @@ All cluster definitions live in `config.json` (gitignored) — never hardcode cl
 ## Available Clusters
 
 Clusters are loaded dynamically from `config.json` by `Load-Config.ps1`.
-Each cluster entry has: `ClusterName`, `ConnectName`, `Alias`, `CsvPrefix`, `Description`, `FallbackIP`, `VIP`.
+Each cluster entry has: `ClusterName`, `ConnectName`, `Alias`, `CsvPrefix`, `Description`, `FallbackIP`, `VIP`, `NdmpPassword`, `SnapmirrorGroup`, `MainCluster`.
+
+Top-level config keys: `Docs_Port`, `ONTAP_ROUser` (default user for `Test-NetappROUser.ps1`), `NDMP_Config`, `Personal_modules`.
 
 After `. .\Load-Config.ps1`, the following are auto-generated **per cluster** from `config.json`:
 
@@ -142,6 +144,9 @@ Passwords are stored as AES-256 encrypted files in `credentials/` (same pattern 
 
 # Retrieve plaintext for automation
 $pwd = & .\credentials\Get-Credential.ps1 -Name "ontap_s3"
+
+# Retrieve as SecureString (for PSCredential workflows)
+$sec = & .\credentials\Get-Credential.ps1 -Name "ontap_s3" -AsSecureString
 ```
 
 ## Ansible

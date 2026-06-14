@@ -135,6 +135,21 @@ Any cluster defined in `config.json`. The function resolves by `ClusterName` or 
 
 The function verifies SSH connectivity before running. No ZAPI / profile dependency.
 
+## Cluster Connectivity Testing
+
+Use `Test-NetappROUser.ps1` to verify ONTAP credentials across all clusters.
+Script location: `scripts/testing/Test-NetappROUser.ps1`.
+
+```powershell
+# Test default read-only user (ONTAP_ROUser from config.json)
+.\scripts\testing\Test-NetappROUser.ps1
+
+# Test a specific user
+.\scripts\testing\Test-NetappROUser.ps1 -UserName admin
+```
+
+Connects via `Connect-NcController` (ZAPI) to each cluster in `$ONTAP_Clusters`. Auto-loads password from `credentials/<UserName>.cred` if present, otherwise prompts interactively. Outputs a table: Cluster, Status (OK/FAILED), Version, Name.
+
 ## Tips
 - Use `Get-<Prefix>Csv` to get structured PowerShell objects for filtering and formatting
 - Pipe results to `| ft` (Format-Table) for clean console display

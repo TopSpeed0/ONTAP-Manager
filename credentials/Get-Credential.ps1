@@ -2,15 +2,27 @@
 .SYNOPSIS
     Retrieve a stored encrypted credential as plaintext or SecureString.
 .DESCRIPTION
-    Decrypts a .cred file using the shared AES key.
+    Decrypts a .cred file using the shared AES key (credentials\aes.key).
     Returns plaintext by default (for piping to Ansible/CLI).
     Use -AsSecureString for PSCredential workflows.
+    Throws if aes.key or the requested .cred file is missing.
+.PARAMETER Name
+    Name of the credential to retrieve. Looks for credentials\<Name>.cred.
+.PARAMETER AsSecureString
+    Return the password as a [SecureString] instead of plaintext.
+    Useful when building a [PSCredential] object.
+.OUTPUTS
+    [string]       — plaintext password (default).
+    [SecureString] — when -AsSecureString is specified.
 .EXAMPLE
     # Plaintext (for Ansible vars_files or env vars)
-    $pwd = .\Get-Credential.ps1 -Name "ontap_s3"
-
+    $pwd = & .\credentials\Get-Credential.ps1 -Name "ontap_s3"
+.EXAMPLE
     # SecureString (for PSCredential)
-    $sec = .\Get-Credential.ps1 -Name "ontap_s3" -AsSecureString
+    $sec = & .\credentials\Get-Credential.ps1 -Name "ontap_s3" -AsSecureString
+.NOTES
+    Requires New-Credential.ps1 to have been run at least once to generate
+    aes.key and the target .cred file.
 #>
 param(
     [Parameter(Mandatory)]
