@@ -1,9 +1,9 @@
 ---
 # =============================================================================
-# Ansible Playbook: Provision S3 Bucket on NetApp ONTAP (svm-s3-data)
+# Ansible Playbook: Provision S3 Bucket on NetApp ONTAP (<s3-svm>)
 # =============================================================================
 # Usage:
-#   ansible-playbook provision_s3_bucket.yml -e "bucket_name=my--bucket bucket_size=107374182400"
+#   ansible-playbook provision_s3_bucket.yml -e "bucket_name=my-new-bucket bucket_size=107374182400"
 #
 # Required extra vars:
 #   bucket_name  - Name of the S3 bucket to create
@@ -17,7 +17,7 @@
 #   ansible-galaxy collection install netapp.ontap
 # =============================================================================
 
-- name: Provision S3 Bucket on svm-s3-data
+- name: Provision S3 Bucket on <s3-svm>
   hosts: localhost
   gather_facts: false
   connection: local
@@ -27,15 +27,15 @@
 
   vars:
     # --- Connection ---
-    # For local testing: use cluster admin (s3-cluster / admin)
-    # For DevOps (SVM-only): use svm_s3_dev / 10.x.x.5 (requires REST API on SVM LIF)
-    ontap_hostname: "s3-cluster"
+    # For local testing: use cluster admin (<cluster-name> / admin)
+    # For DevOps (SVM-only): use svm_s3_dev / <svm-mgmt-ip> (requires REST API on SVM LIF)
+    ontap_hostname: "<cluster-name>"
     ontap_username: "admin"
     # ontap_password: set via vault_credentials.yml
     ontap_validate_certs: false  # Self-signed cert
 
     # --- SVM / S3 config ---
-    ontap_vserver: "svm-s3-data"
+    ontap_vserver: "<s3-svm>"
 
     # --- Bucket defaults ---
     bucket_name: ""  # REQUIRED - pass via -e "bucket_name=xxx"
@@ -109,7 +109,7 @@
         msg: |
           Bucket '{{ bucket_name }}' provisioned successfully on {{ ontap_vserver }}
           Size: {{ (bucket_size | int / 1073741824) | round(1) }} GB
-          S3 Endpoint: https://s3-data-svm.example.local/{{ bucket_name }}
+          S3 Endpoint: https://<s3-data-lif-fqdn>/{{ bucket_name }}
           S3 User: {{ s3_user }}
       when: bucket_result is changed
 

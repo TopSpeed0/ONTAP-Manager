@@ -147,7 +147,7 @@ vserver peer create -vserver svm_X -peer-vserver svm_X -peer-cluster dest_cluste
 2. ONTAP may auto-accept and auto-assign a `.1` suffix on the destination (e.g., `svm_X.1`)
 3. **On destination**: rename the auto-assigned local-name to something meaningful:
    ```
-   vserver peer modify-local-name -peer-cluster source_cluster -peer-vserver svm_X --name svm_X_med1
+   vserver peer modify-local-name -peer-cluster source_cluster -peer-vserver svm_X -new-name svm_X_med1
    ```
 4. **In `snapmirror create` on destination**: use the peer local-name as source-path:
    ```

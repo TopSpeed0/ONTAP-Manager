@@ -42,10 +42,10 @@ aws s3api list-objects-v2 --bucket <BUCKET> --endpoint-url https://<ENDPOINT> --
 aws s3api list-object-versions --bucket <BUCKET> --endpoint-url https://<ENDPOINT> --profile <PROFILE> --no-verify-ssl --max-items 10
 
 # Recursive upload
-aws s3 sync ./local-fer s3://<BUCKET>/prefix/ --endpoint-url https://<ENDPOINT> --profile <PROFILE> --no-verify-ssl
+aws s3 sync ./local-folder s3://<BUCKET>/prefix/ --endpoint-url https://<ENDPOINT> --profile <PROFILE> --no-verify-ssl
 
 # Recursive download
-aws s3 sync s3://<BUCKET>/prefix/ ./local-fer --endpoint-url https://<ENDPOINT> --profile <PROFILE> --no-verify-ssl
+aws s3 sync s3://<BUCKET>/prefix/ ./local-folder --endpoint-url https://<ENDPOINT> --profile <PROFILE> --no-verify-ssl
 
 # Recursive delete
 aws s3 rm s3://<BUCKET>/ --recursive --endpoint-url https://<ENDPOINT> --profile <PROFILE> --no-verify-ssl
@@ -88,7 +88,7 @@ rclone config create <REMOTE_NAME> s3 provider=Other endpoint=https://<S3_ENDPOI
 rclone ls <REMOTE>:<BUCKET> --no-check-certificate
 
 # Sync
-rclone sync <REMOTE>:<BUCKET> ./local-fer --no-check-certificate -v
+rclone sync <REMOTE>:<BUCKET> ./local-folder --no-check-certificate -v
 
 # Purge bucket (delete all objects + versions + markers)
 rclone purge <REMOTE>:<BUCKET> --s3-versions --no-check-certificate -v
@@ -96,7 +96,7 @@ rclone purge <REMOTE>:<BUCKET> --s3-versions --no-check-certificate -v
 
 ## Available PowerShell Scripts
 
-Source: `C:\Users\Operator\OneDrive\Documents\code\MyOrg\S3\generic\`
+Source: `<path-to-s3-scripts>/`
 
 | Script | Purpose | Key Features |
 |--------|---------|--------------|

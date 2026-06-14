@@ -35,14 +35,42 @@ if ($global:Config._comment -and $global:Config._comment -match 'Copy this file 
 # --- ONTAP clusters ---------------------------------------------------------
 $global:ONTAP_Clusters = @()
 foreach ($c in $global:Config.ONTAP_Clusters) {
-    $obj = -Object System.Object
+    $obj = New-Object System.Object
     $obj | Add-Member -MemberType NoteProperty -Name 'ClusterName'  -Value $c.ClusterName
     $obj | Add-Member -MemberType NoteProperty -Name 'ConnectName'  -Value $c.ConnectName
     $obj | Add-Member -MemberType NoteProperty -Name 'Alias'        -Value $c.Alias
     $obj | Add-Member -MemberType NoteProperty -Name 'CsvPrefix'    -Value $c.CsvPrefix
     $obj | Add-Member -MemberType NoteProperty -Name 'Description'  -Value $c.Description
-    $obj | Add-Member -MemberType NoteProperty -Name 'FallbackIP'   -Value $c.FallbackIP
+    $obj | Add-Member -MemberType NoteProperty -Name 'FallbackIP'   -Value $c.FallbackIP -Force
+    $obj | Add-Member -MemberType NoteProperty -Name 'VIP'          -Value ([bool]$c.VIP) -Force
     $global:ONTAP_Clusters += $obj
+}
+
+# --- VIP / cluster selection helpers ----------------------------------------
+# Scripts use: $targets = Get-OntapTargetClusters [-Cluster "Prod"] [-VIP]
+# - No params     → all clusters
+# - -VIP          → only VIP-marked clusters (or all if none are VIP)
+# - -Cluster "X"  → specific cluster by Alias or ClusterName
+function global:Get-OntapTargetClusters {
+    [CmdletBinding()]
+    param(
+        [string]$Cluster,
+        [switch]$VIP
+    )
+    if ($Cluster) {
+        $match = $global:ONTAP_Clusters | Where-Object {
+            $_.Alias -eq $Cluster -or $_.ClusterName -eq $Cluster -or $_.ConnectName -eq $Cluster
+        }
+        if (-not $match) { throw "Cluster '$Cluster' not found in config.json" }
+        return @($match)
+    }
+    if ($VIP) {
+        $vips = $global:ONTAP_Clusters | Where-Object { $_.VIP -eq $true }
+        if ($vips) { return @($vips) }
+        # Fallback: if no VIP marked, return all
+        return @($global:ONTAP_Clusters)
+    }
+    return @($global:ONTAP_Clusters)
 }
 
 # --- ONTAP credential (Jenkins env vars or interactive fallback) ------------
@@ -57,7 +85,7 @@ $_envPass = [System.Environment]::GetEnvironmentVariable($global:ONTAP_Credentia
 
 if (![string]::IsNullOrWhiteSpace($_envUser) -and ![string]::IsNullOrWhiteSpace($_envPass)) {
     $secPass = ConvertTo-SecureString $_envPass -AsPlainText -Force
-    $global:ONTAP_Credential = -Object System.Management.Automation.PSCredential($_envUser, $secPass)
+    $global:ONTAP_Credential = New-Object System.Management.Automation.PSCredential($_envUser, $secPass)
     Write-Host "INFO: ONTAP credential loaded from Jenkins env vars ($($global:ONTAP_CredentialConfig.EnvVarUser))" -ForegroundColor Green
 }
 else {
@@ -109,8 +137,8 @@ if (`$Command) { ssh admin@$sshHost `$Command } else { ssh admin@$sshHost }
 
     # --- Alias → connect function (if Alias is set and differs from ConnectName) ---
     if ($alias -and $alias -ne $connectName) {
-        -Alias -Name $alias   -Value $connectName  -Scope Global -Force -ErrorAction SilentlyContinue
-        -Alias -Name "$alias-s" -Value $sshFuncName -Scope Global -Force -ErrorAction SilentlyContinue
+        Set-Alias -Name $alias   -Value $connectName  -Scope Global -Force -ErrorAction SilentlyContinue
+        Set-Alias -Name "$alias-s" -Value $sshFuncName -Scope Global -Force -ErrorAction SilentlyContinue
     }
 
     # --- CSV wrapper: Get-<CsvPrefix>Csv ---
@@ -124,10 +152,4 @@ Invoke-OntapCsv -SshFunction '$sshFuncName' -Command `$Command -Headers `$Header
     }
 }
 
-# --- Auto-update README cluster table (silent) -----------------------------
-$_readmeUpdater = Join-Path $rootDir 'Update-ReadmeClusterTable.ps1'
-$_readmePath    = Join-Path $rootDir 'README.MD'
-if ((Test-Path $_readmeUpdater) -and (Test-Path $_readmePath)) {
-    try { & $_readmeUpdater -ConfigPath $global:ConfigPath -ReadmePath $_readmePath 2>$null | Out-Null }
-    catch { <# non-critical — skip silently #> }
-}
+

@@ -43,7 +43,7 @@ These require a browser, an account, or a secret. Complete them before the AI st
    - Run: `claude --version`
    - Report the version back
 
-4. **After AI finishes**, restart Claude Code so the  MCP server and skill load:
+4. **After AI finishes**, restart Claude Code so the new MCP server and skill load:
    - Close all Claude Code windows
    - Reopen — then ask Claude "list your MCP tools" and "list your skills" to verify
 
@@ -74,7 +74,7 @@ Insert this block under `mcpServers` (use the API key the human provided):
 }
 ```
 
-**MyOrg / corporate-proxy note**: if the user is on a network with TLS interception, `npx` may fail to fetch the package over HTTPS. If that happens, change `command` to the absolute path of `node.exe` and prepend `--use-system-ca`:
+**Cognyte / corporate-proxy note**: if the user is on a network with TLS interception, `npx` may fail to fetch the package over HTTPS. If that happens, change `command` to the absolute path of `node.exe` and prepend `--use-system-ca`:
 
 ```json
 "command": "C:\\Program Files\\nodejs\\node.exe",
@@ -92,7 +92,7 @@ Insert this block under `mcpServers` (use the API key the human provided):
   ```
 
 - If git clone fails (corporate proxy), fall back to downloading the repo ZIP from GitHub and extracting it to the same path
-- Verify the fer contains `SKILL.md`, `data/`, and `scripts/`
+- Verify the folder contains `SKILL.md`, `data/`, and `scripts/`
 
 ### Step 4 — Sanity-check the skill definition
 
@@ -137,4 +137,4 @@ If any of those fail, troubleshoot in this order: API key correctness → npx ne
 - **Never** commit the API key to git. If a `.mcp.json` is being added to a repo, gitignore it and store the key in `.claude.json` (user-scope) instead.
 - **Never** run `npm install -g` for this — `npx -y @21st-dev/magic@latest` keeps it self-updating and avoids polluting global node_modules.
 - If the user already has a `magic` MCP entry, **diff before overwriting** and ask.
-- Treat the human's "I restarted" as the gate for Step 7 — don't try to invoke the  tools in the same session you edited the config; they only load on Claude Code startup.
+- Treat the human's "I restarted" as the gate for Step 7 — don't try to invoke the new tools in the same session you edited the config; they only load on Claude Code startup.

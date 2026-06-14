@@ -1,4 +1,4 @@
-# S3 Bucket Provisioning — svm-s3-data (cluster-s3)
+# S3 Bucket Provisioning — <s3-svm> (<cluster-name>)
 
 Automates S3 bucket provisioning on ONTAP using the `netapp.ontap` Ansible collection.
 
@@ -7,20 +7,20 @@ Automates S3 bucket provisioning on ONTAP using the `netapp.ontap` Ansible colle
 ## Architecture
 
 ```
-cluster-s3 cluster (10.x.x.4)
-└── SVM: svm-s3-data
-    ├── lif_svm-s3-data_MGMT  10.x.x.5  ← REST API (management)
+<cluster-name> cluster (<cluster-mgmt-ip>)
+└── SVM: <s3-svm>
+    ├── lif_<s3-svm>_MGMT  <cluster-ip>  ← REST API (management)
     │   service-policy: default-management
     │
-    └── lif_svm-s3-data_287   10.x.x.14  ← S3 data endpoint
-        DNS: s3-data-svm.example.local
+    └── lif_<s3-svm>_287   <s3-data-lif-ip>  ← S3 data endpoint
+        DNS: <s3-data-lif-fqdn>
         service-policy: sm-custom-service-policy-nas-s3
         (data-s3-server, data-nfs, data-cifs, ...)
 ```
 
 **Two LIFs, two purposes:**
-- **MGMT LIF** (`10.x.x.5`) — serves ONTAP REST API, System Manager, SSH. Used by Ansible.
-- **S3 Data LIF** (`10.x.x.14` / `s3-data-svm.example.local`) — serves S3 protocol only. Used by S3 clients (aws-cli, rclone, app SDKs).
+- **MGMT LIF** (`<cluster-ip>`) — serves ONTAP REST API, System Manager, SSH. Used by Ansible.
+- **S3 Data LIF** (`<s3-data-lif-ip>` / `<s3-data-lif-fqdn>`) — serves S3 protocol only. Used by S3 clients (aws-cli, rclone, app SDKs).
 
 ---
 
@@ -28,8 +28,8 @@ cluster-s3 cluster (10.x.x.4)
 
 | Playbook | User | Target Host | Vault File | Use Case |
 |----------|------|-------------|------------|----------|
-| `provision_s3_bucket_admin.yml` | `admin` | `s3-cluster` (cluster mgmt) | `vault_credentials_admin.yml` | Infrastructure admin, full cluster access |
-| `provision_s3_bucket_dev.yml` | `svm_s3_dev` | `10.x.x.5` (SVM mgmt) | `vault_credentials_dev.yml` | DevOps pipeline, SVM-scoped (vsadmin role) |
+| `provision_s3_bucket_admin.yml` | `admin` | `<cluster-name>` (cluster mgmt) | `vault_credentials_admin.yml` | Infrastructure admin, full cluster access |
+| `provision_s3_bucket_dev.yml` | `svm_s3_dev` | `<cluster-ip>` (SVM mgmt) | `vault_credentials_dev.yml` | DevOps pipeline, SVM-scoped (vsadmin role) |
 
 Both playbooks create an S3 bucket with a bucket policy granting `sm_s3_dev` full access (Get/Put/Delete/List).
 
@@ -65,12 +65,12 @@ cd ansible/s3-bucket-provision/
 # Dev playbook (what DevOps team uses)
 ansible-playbook provision_s3_bucket_dev.yml \
   --vault-password-file ~/.vault_pass \
-  -e "bucket_name=my--bucket"
+  -e "bucket_name=my-new-bucket"
 
 # Admin playbook (full cluster access)
 ansible-playbook provision_s3_bucket_admin.yml \
   --vault-password-file ~/.vault_pass \
-  -e "bucket_name=my--bucket"
+  -e "bucket_name=my-new-bucket"
 
 # Custom size (500GB)
 ansible-playbook provision_s3_bucket_dev.yml \
@@ -89,10 +89,10 @@ Since Ansible doesn't run on Windows, use these copy-paste commands from PowerSh
 
 ```powershell
 # Dev playbook (SVM user)
-wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c 'export PATH=/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin; cd "/mnt/c/Users/Operator/OneDrive/Documents/code/Netapp-Code-WorkSpace/ansible/s3-bucket-provision"; ansible-playbook provision_s3_bucket_dev.yml --vault-password-file ~/.vault_pass -e "bucket_name=my-bucket"'
+wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c 'export PATH=/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin; cd "<workspace-root>/ansible/s3-bucket-provision"; ansible-playbook provision_s3_bucket_dev.yml --vault-password-file ~/.vault_pass -e "bucket_name=my-bucket"'
 
 # Admin playbook (cluster admin)
-wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c 'export PATH=/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin; cd "/mnt/c/Users/Operator/OneDrive/Documents/code/Netapp-Code-WorkSpace/ansible/s3-bucket-provision"; ansible-playbook provision_s3_bucket_admin.yml --vault-password-file ~/.vault_pass -e "bucket_name=my-bucket"'
+wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c 'export PATH=/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin; cd "<workspace-root>/ansible/s3-bucket-provision"; ansible-playbook provision_s3_bucket_admin.yml --vault-password-file ~/.vault_pass -e "bucket_name=my-bucket"'
 ```
 
 ---
@@ -131,14 +131,14 @@ ansible-vault decrypt vault_credentials_dev.yml --vault-password-file ~/.vault_p
 ansible-vault encrypt vault_credentials_dev.yml --vault-password-file ~/.vault_pass
 ```
 
-### Quick-set a  vault ONTAP password (one-liner)
+### Quick-set a new vault ONTAP password (one-liner)
 
-Creates (or replaces) a vault file with a  ONTAP password — prompts securely, no password in shell history:
+Creates (or replaces) a vault file with a new ONTAP password — prompts securely, no password in shell history:
 
 ```bash
 # Generic pattern:
 wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c 'export PATH=/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin; \
-  cd "/mnt/c/Users/Operator/OneDrive/Documents/code/Netapp-Code-WorkSpace/ansible/s3-bucket-provision"; \
+  cd "<workspace-root>/ansible/s3-bucket-provision"; \
   ansible-vault decrypt VAULT_FILE.yml --vault-password-file ~/.vault_pass 2>/dev/null; \
   read -sp "Enter ONTAP password: " PW; echo; \
   echo "---" > VAULT_FILE.yml; \
@@ -146,14 +146,14 @@ wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c 'export PATH=/usr/local/bin:/u
   ansible-vault encrypt VAULT_FILE.yml --vault-password-file ~/.vault_pass; \
   echo "Done"'
 
-# Example — set cluster-prod admin password:
+# Example — set <cluster-name> admin password:
 wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c 'export PATH=/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin; \
-  cd "/mnt/c/Users/Operator/OneDrive/Documents/code/Netapp-Code-WorkSpace/ansible/s3-bucket-provision"; \
-  ansible-vault decrypt vault_template_Prod_admin.yml --vault-password-file ~/.vault_pass 2>/dev/null; \
-  read -sp "Enter cluster-prod admin password: " PW; echo; \
-  echo "---" > vault_template_Prod_admin.yml; \
-  echo "ontap_password: \"$PW\"" >> vault_template_Prod_admin.yml; \
-  ansible-vault encrypt vault_template_Prod_admin.yml --vault-password-file ~/.vault_pass; \
+  cd "<workspace-root>/ansible/s3-bucket-provision"; \
+  ansible-vault decrypt vault_template_a1k_admin.yml --vault-password-file ~/.vault_pass 2>/dev/null; \
+  read -sp "Enter <cluster-name> admin password: " PW; echo; \
+  echo "---" > vault_template_a1k_admin.yml; \
+  echo "ontap_password: \"$PW\"" >> vault_template_a1k_admin.yml; \
+  ansible-vault encrypt vault_template_a1k_admin.yml --vault-password-file ~/.vault_pass; \
   echo "Done"'
 ```
 
@@ -172,8 +172,8 @@ This is NOT an ONTAP password. It's a separate key used only to lock/unlock vaul
 # View current master password
 wsl -d Ubuntu-22.04 -- cat ~/.vault_pass
 
-# Set a  master password (re-key all vault files after!)
-wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c 'read -sp " vault master password: " PW; echo "$PW" > ~/.vault_pass; chmod 600 ~/.vault_pass; echo "Updated"'
+# Set a new master password (re-key all vault files after!)
+wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c 'read -sp "New vault master password: " PW; echo "$PW" > ~/.vault_pass; chmod 600 ~/.vault_pass; echo "Updated"'
 ```
 
 ### Restore ~/.vault_pass from PowerShell credential store
@@ -194,7 +194,7 @@ Pull the vault master key from the PowerShell credential store and pipe it direc
 $vaultPw = & .\credentials\Get-Credential.ps1 -Name "vault_key"
 
 # Step 2: View any vault file
-wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c "export PATH=/usr/local/bin:/usr/bin:/bin:`$HOME/.local/bin; cd '/mnt/c/Users/Operator/OneDrive/Documents/code/Netapp-Code-WorkSpace/ansible/s3-bucket-provision'; echo '$vaultPw' | ansible-vault view credentials/vault_credentials_Prod_admin.yml --vault-password-file /dev/stdin"
+wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c "export PATH=/usr/local/bin:/usr/bin:/bin:`$HOME/.local/bin; cd '<workspace-root>/ansible/s3-bucket-provision'; echo '$vaultPw' | ansible-vault view credentials/vault_credentials_a1k_admin.yml --vault-password-file /dev/stdin"
 ```
 
 ### Pass ONTAP password from credential store directly to Ansible (no vault file needed)
@@ -202,7 +202,7 @@ wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c "export PATH=/usr/local/bin:/u
 ```powershell
 # Get ONTAP password from PowerShell credential store and pass to generic playbook
 $pw = & .\credentials\Get-Credential.ps1 -Name "ontap_s3"
-wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c "export PATH=/usr/local/bin:/usr/bin:/bin:`$HOME/.local/bin; cd '/mnt/c/Users/Operator/OneDrive/Documents/code/Netapp-Code-WorkSpace/ansible/s3-bucket-provision'; ansible-playbook provision_s3_bucket_generic.yml -e 'ontap_hostname=cluster-prod ontap_vserver=svm_s3_prod ontap_password=$pw bucket_name=my-bucket s3_user=jfrog-s3'"
+wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c "export PATH=/usr/local/bin:/usr/bin:/bin:`$HOME/.local/bin; cd '<workspace-root>/ansible/s3-bucket-provision'; ansible-playbook provision_s3_bucket_generic.yml -e 'ontap_hostname=<cluster-name> ontap_vserver=<s3-svm> ontap_password=$pw bucket_name=my-bucket s3_user=jfrog-s3'"
 ```
 
 ---
@@ -211,12 +211,12 @@ wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c "export PATH=/usr/local/bin:/u
 
 | Item | Value |
 |------|-------|
-| Cluster | cluster-s3 (`10.x.x.4`) |
+| Cluster | <cluster-name> (`<cluster-mgmt-ip>`) |
 | ONTAP Version | 9.13.1P9 |
-| SVM | svm-s3-data |
-| SVM MGMT LIF | `10.x.x.5` (lif_svm-s3-data_MGMT) |
-| S3 Data LIF | `10.x.x.14` (lif_svm-s3-data_287) |
-| S3 Endpoint | `https://s3-data-svm.example.local` |
+| SVM | <s3-svm> |
+| SVM MGMT LIF | `<cluster-ip>` (lif_<s3-svm>_MGMT) |
+| S3 Data LIF | `<s3-data-lif-ip>` (lif_<s3-svm>_287) |
+| S3 Endpoint | `https://<s3-data-lif-fqdn>` |
 | ONTAP REST API User | `svm_s3_dev` (role: vsadmin) |
 | S3 Object User | `sm_s3_dev` |
 | Ansible Collection | `netapp.ontap` >= 21.19.0 |
@@ -243,28 +243,28 @@ The `netapp.ontap` collection interprets this as a `400 Bad Request`.
 
 ```
 # Check current policy
-net int show -vserver svm-s3-data -fields service-policy
+net int show -vserver <s3-svm> -fields service-policy
 
 # Fix: switch MGMT LIF to default-management
-net int modify -vserver svm-s3-data -lif lif_svm-s3-data_MGMT \
+net int modify -vserver <s3-svm> -lif lif_<s3-svm>_MGMT \
   -service-policy default-management
 
 # Verify the S3 data LIF keeps its own policy (with data-s3-server)
-net int show -vserver svm-s3-data -fields service-policy
+net int show -vserver <s3-svm> -fields service-policy
 ```
 
 **Rule of thumb:** Separate your LIFs — S3 data on one LIF, management on another.
-The cluster-prod cluster (`svm_s3_prod`) is a good reference: its S3 policy has NO
+The <cluster-name> cluster (`<s3-svm>`) is a good reference: its S3 policy has NO
 management services (`management-ssh`, `management-https`, `management-http`).
 
 ### "User is not authorized"
 
 Check that:
-1. The user has `http` application login: `security login show -vserver svm-s3-data -user-or-group-name svm_s3_dev`
-2. The role has REST API access: `security login rest-role show -vserver svm-s3-data -role vsadmin -api /api/protocols/s3/*`
+1. The user has `http` application login: `security login show -vserver <s3-svm> -user-or-group-name svm_s3_dev`
+2. The role has REST API access: `security login rest-role show -vserver <s3-svm> -role vsadmin -api /api/protocols/s3/*`
 3. The password is correct (test with curl):
    ```bash
-   curl -sk -u 'svm_s3_dev:PASSWORD' 'https://10.x.x.5/api/cluster?fields=version'
+   curl -sk -u 'svm_s3_dev:PASSWORD' 'https://<cluster-ip>/api/cluster?fields=version'
    ```
 
 ### Ansible doesn't run on Windows
@@ -275,7 +275,7 @@ OSError: [WinError 1] Incorrect function
 ```
 Use **WSL** (Ubuntu-22.04). Ansible is installed at `~/.local/bin/`.
 
-### WSL can't reach cluster IPs (10.x.x.x)
+### WSL can't reach cluster IPs (10.163.x.x)
 
 WSL2 NAT mode can't route to corporate subnets. Fix:
 ```
@@ -292,13 +292,13 @@ Then restart WSL: `wsl --shutdown`
 ```
 ansible/s3-bucket-provision/
 ├── provision_s3_bucket_generic.yml   # Generic playbook — any cluster/SVM
-├── provision_s3_bucket_admin.yml     # s3-cluster cluster admin
-├── provision_s3_bucket_dev.yml       # s3-cluster SVM dev user
+├── provision_s3_bucket_admin.yml     # <cluster-name> cluster admin
+├── provision_s3_bucket_dev.yml       # <cluster-name> SVM dev user
 ├── provision_s3_bucket.yml           # Legacy (original)
 ├── credentials/
-│   ├── vault_credentials_Prod_admin.yml         # cluster-prod admin password
-│   ├── vault_credentials_s3-cluster_admin.yml   # s3-cluster admin password
-│   ├── vault_credentials_s3-cluster_sm_s3_dev.yml # s3-cluster svm_s3_dev password
+│   ├── vault_credentials_a1k_admin.yml         # <cluster-name> admin password
+│   ├── vault_credentials_<cluster-name>_admin.yml   # <cluster-name> admin password
+│   ├── vault_credentials_<cluster-name>_sm_s3_dev.yml # <cluster-name> svm_s3_dev password
 │   ├── vault_credentials.yml                   # Legacy (shared)
 │   └── vault_template.yml                      # Template (CHANGEME)
 └── README.md

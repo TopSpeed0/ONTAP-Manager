@@ -58,7 +58,7 @@ vserver create -vserver <name> -subtype dp-destination
 
 ## SVM Capacity (ONTAP 9.13.1+)
 - Can set **maximum capacity** for an SVM
-- Configure alerts when approaching thresh capacity level
+- Configure alerts when approaching threshold capacity level
 
 ## Protocol Configuration
 
@@ -105,7 +105,7 @@ vserver modify -vserver <name> -allowed-protocols nfs,cifs,iscsi
 
 ### Set SVM Max Capacity (ONTAP 9.13.1+)
 ```
-vserver modify -vserver <name> -storage-limit <size> -storage-limit-thresh-alert <percent>
+vserver modify -vserver <name> -storage-limit <size> -storage-limit-threshold-alert <percent>
 ```
 
 ### Delete SVM (requires all volumes and LIFs removed first)

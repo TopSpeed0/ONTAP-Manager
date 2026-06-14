@@ -7,7 +7,7 @@ argument-hint: 'Specify operation (create, break, resync, status) and source/des
 # SnapMirror Management
 
 ## When to Use
-- Creating  SnapMirror replication relationships
+- Creating new SnapMirror replication relationships
 - Checking SnapMirror health / status / lag
 - Breaking mirrors for failover
 - Resyncing after failover
@@ -34,72 +34,72 @@ Ask the user:
 ### Show SnapMirror Status
 ```powershell
 # All relationships on source
-Get-ProdCsv -Command "snapmirror show -fields source-path,destination-path,state,status,healthy,lag-time,schedule"
+Get-<Prefix>Csv -Command "snapmirror show -fields source-path,destination-path,state,status,healthy,lag-time,schedule"
 
 # All relationships on destination
-Dr-s -Command "snapmirror show -fields source-path,destination-path,state,status,healthy,lag-time,schedule"
+<cluster-ssh> -Command "snapmirror show -fields source-path,destination-path,state,status,healthy,lag-time,schedule"
 ```
 
 ### Create Volume-Level SnapMirror
 ```powershell
 # 1. Create destination volume (DP type)
-Dr-s -Command "vol create -vserver <dest-svm> -volume <dest-vol> -aggregate <aggr> -size <size> -type DP"
+<cluster-ssh> -Command "vol create -vserver <dest-svm> -volume <dest-vol> -aggregate <aggr> -size <size> -type DP"
 
 # 2. Create SnapMirror relationship
-Dr-s -Command "snapmirror create -source-path <src-svm>:<src-vol> -destination-path <dest-svm>:<dest-vol> -type XDP -policy MirrorAllSnapshots -schedule hourly"
+<cluster-ssh> -Command "snapmirror create -source-path <src-svm>:<src-vol> -destination-path <dest-svm>:<dest-vol> -type XDP -policy MirrorAllSnapshots -schedule hourly"
 
 # 3. Initialize
-Dr-s -Command "snapmirror initialize -destination-path <dest-svm>:<dest-vol>"
+<cluster-ssh> -Command "snapmirror initialize -destination-path <dest-svm>:<dest-vol>"
 ```
 
 ### Manual Update (Trigger Transfer)
 ```powershell
-Dr-s -Command "snapmirror update -destination-path <dest-svm>:<dest-vol>"
+<cluster-ssh> -Command "snapmirror update -destination-path <dest-svm>:<dest-vol>"
 ```
 
 ### Break Mirror (Failover)
 **WARNING:** Confirm with user before running.
 ```powershell
-Dr-s -Command "snapmirror break -destination-path <dest-svm>:<dest-vol>"
+<cluster-ssh> -Command "snapmirror break -destination-path <dest-svm>:<dest-vol>"
 ```
 
 ### Resync (After Failover)
 ```powershell
 # Resync back to original direction
-Dr-s -Command "snapmirror resync -destination-path <dest-svm>:<dest-vol>"
+<cluster-ssh> -Command "snapmirror resync -destination-path <dest-svm>:<dest-vol>"
 
-# Or reverse resync (make  source the  destination)
-Prod-s -Command "snapmirror resync -destination-path <src-svm>:<src-vol>"
+# Or reverse resync (make old source the new destination)
+<cluster-ssh> -Command "snapmirror resync -destination-path <src-svm>:<src-vol>"
 ```
 
 ### Abort a Running Transfer
 ```powershell
-Dr-s -Command "snapmirror abort -destination-path <dest-svm>:<dest-vol>"
+<cluster-ssh> -Command "snapmirror abort -destination-path <dest-svm>:<dest-vol>"
 ```
 
 ### Delete Relationship
 **WARNING:** Confirm with user before running.
 ```powershell
 # Release on source (cleans up snapshots)
-Prod-s -Command "snapmirror release -destination-path <dest-svm>:<dest-vol>"
+<cluster-ssh> -Command "snapmirror release -destination-path <dest-svm>:<dest-vol>"
 
 # Delete on destination
-Dr-s -Command "snapmirror delete -destination-path <dest-svm>:<dest-vol>"
+<cluster-ssh> -Command "snapmirror delete -destination-path <dest-svm>:<dest-vol>"
 ```
 
 ### Check Transfer History
 ```powershell
-Dr-s -Command "snapmirror show-history -destination-path <dest-svm>:<dest-vol>"
+<cluster-ssh> -Command "snapmirror show-history -destination-path <dest-svm>:<dest-vol>"
 ```
 
 ### Throttle Bandwidth
 ```powershell
 # Limit outgoing replication bandwidth (KBps). Example: 100 Mbps = 12500 KBps
-Prod-s -Command "options -option-name replication.throttle.outgoing.max_kbs 12500"
+<cluster-ssh> -Command "options -option-name replication.throttle.outgoing.max_kbs 12500"
 ```
 
 ## Safety
 - Never run `snapmirror break` or `snapmirror delete` without explicit user confirmation
 - Always verify source and destination paths before creating relationships
 - Check current state before performing operations
-- Verify peering is healthy before creating  relationships
+- Verify peering is healthy before creating new relationships

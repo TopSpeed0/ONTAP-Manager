@@ -39,52 +39,52 @@ argument-hint: 'Specify the SVM and S3 operation (e.g., create server, create bu
 
 ### Create an S3 Server on an SVM
 
-#### Option A:  SVM for S3
+#### Option A: New SVM for S3
 ```powershell
 # Create SVM with S3 data service
-Prod-s -Command "vserver create -vserver <svm_name> -subtype default -rootvolume <root_vol> -aggregate <aggr> -rootvolume-security-style unix -language C.UTF-8 -data-services data-s3-server"
+<cluster-ssh> -Command "vserver create -vserver <svm_name> -subtype default -rootvolume <root_vol> -aggregate <aggr> -rootvolume-security-style unix -language C.UTF-8 -data-services data-s3-server"
 
 # Verify SVM
-Prod-s -Command "vserver show -vserver <svm_name>"
+<cluster-ssh> -Command "vserver show -vserver <svm_name>"
 ```
 
 #### Option B: Enable S3 on existing SVM
 ```powershell
 # Create self-signed CA certificate
-Prod-s -Command "security certificate create -vserver <svm_name> -type root-ca -common-name <ca_name>"
+<cluster-ssh> -Command "security certificate create -vserver <svm_name> -type root-ca -common-name <ca_name>"
 
 # Generate CSR (if using external CA)
-Prod-s -Command "security certificate generate-csr -common-name <s3_server_fqdn>"
+<cluster-ssh> -Command "security certificate generate-csr -common-name <s3_server_fqdn>"
 
 # Install signed certificate
-Prod-s -Command "security certificate install -vserver <svm_name> -type server"
+<cluster-ssh> -Command "security certificate install -vserver <svm_name> -type server"
 
 # Create S3 server
-Prod-s -Command "vserver object-store-server create -vserver <svm_name> -object-store-server <s3_server_name> -certificate-name <cert_name> -is-http-enabled false -is-https-enabled true -https-port 443"
+<cluster-ssh> -Command "vserver object-store-server create -vserver <svm_name> -object-store-server <s3_server_name> -certificate-name <cert_name> -is-http-enabled false -is-https-enabled true -https-port 443"
 
 # Verify
-Prod-s -Command "vserver object-store-server show -vserver <svm_name>"
+<cluster-ssh> -Command "vserver object-store-server show -vserver <svm_name>"
 ```
 
 ### Create an S3 Bucket
 ```powershell
 # Auto aggregate selection (default)
-Prod-s -Command "vserver object-store-server bucket create -vserver <svm_name> -bucket <bucket_name> -size <size>"
+<cluster-ssh> -Command "vserver object-store-server bucket create -vserver <svm_name> -bucket <bucket_name> -size <size>"
 
 # With specific aggregate (advanced privilege)
-Prod-s -Command "set -privilege advanced; vserver object-store-server bucket create -vserver <svm_name> -bucket <bucket_name> -size 1TB -aggr-list <aggr1>,<aggr2>"
+<cluster-ssh> -Command "set -privilege advanced; vserver object-store-server bucket create -vserver <svm_name> -bucket <bucket_name> -size 1TB -aggr-list <aggr1>,<aggr2>"
 
 # For FabricPool local tiering
-Prod-s -Command "vserver object-store-server bucket create -vserver <svm_name> -bucket <bucket_name> -size <size> -used-as-capacity-tier true"
+<cluster-ssh> -Command "vserver object-store-server bucket create -vserver <svm_name> -bucket <bucket_name> -size <size> -used-as-capacity-tier true"
 
 # With QoS service level
-Prod-s -Command "vserver object-store-server bucket create -vserver <svm_name> -bucket <bucket_name> -size <size> -storage-service-level extreme"
+<cluster-ssh> -Command "vserver object-store-server bucket create -vserver <svm_name> -bucket <bucket_name> -size <size> -storage-service-level extreme"
 
 # Resize bucket
-Prod-s -Command "vserver object-store-server bucket modify -vserver <svm_name> -bucket <bucket_name> -size <_size>"
+<cluster-ssh> -Command "vserver object-store-server bucket modify -vserver <svm_name> -bucket <bucket_name> -size <new_size>"
 
 # Verify
-Prod-s -Command "vserver object-store-server bucket show -vserver <svm_name>"
+<cluster-ssh> -Command "vserver object-store-server bucket show -vserver <svm_name>"
 ```
 
 ### Manage S3 Users
@@ -107,7 +107,7 @@ $resp = Invoke-RestMethod -Method POST -Uri "https://<cluster>/api/protocols/s3/
 $resp | ConvertTo-Json -Depth 5
 # Output includes: access_key and secret_key
 
-# 4. Regenerate keys — also returns  secret_key
+# 4. Regenerate keys — also returns new secret_key
 Invoke-RestMethod -Method POST -Uri "https://<cluster>/api/protocols/s3/services/$svmUuid/users/<username>?regenerate_keys=true" -Headers $headers -SkipCertificateCheck -Method PATCH | ConvertTo-Json -Depth 5
 
 # 5. Delete user
@@ -120,19 +120,19 @@ Invoke-RestMethod -Uri "https://<cluster>/api/protocols/s3/services/$svmUuid/use
 #### Option B: Via CLI (access key only — secret key is lost in non-interactive SSH)
 ```powershell
 # Create user (generates access key + secret key — save them!)
-Prod-s -Command "vserver object-store-server user create -vserver <svm_name> -user <username>"
+<cluster-ssh> -Command "vserver object-store-server user create -vserver <svm_name> -user <username>"
 
 # Create user with key expiry (ONTAP 9.14.1+)
-Prod-s -Command "vserver object-store-server user create -vserver <svm_name> -user <username> -key-time-to-live P30DT0H0M0S"
+<cluster-ssh> -Command "vserver object-store-server user create -vserver <svm_name> -user <username> -key-time-to-live P30DT0H0M0S"
 
 # Show users (access key only, NO secret key)
-Prod-s -Command "vserver object-store-server user show -vserver <svm_name>"
+<cluster-ssh> -Command "vserver object-store-server user show -vserver <svm_name>"
 
 # Regenerate keys (secret key shown only in interactive session)
-Prod-s -Command "vserver object-store-server user regenerate-keys -vserver <svm_name> -user <username>"
+<cluster-ssh> -Command "vserver object-store-server user regenerate-keys -vserver <svm_name> -user <username>"
 
 # Delete user
-Prod-s -Command "vserver object-store-server user delete -vserver <svm_name> -user <username>"
+<cluster-ssh> -Command "vserver object-store-server user delete -vserver <svm_name> -user <username>"
 ```
 
 > **Note**: The `-comment` parameter with spaces causes `Unexpected argument` errors via SSH. Either use the REST API or omit comments with spaces.
@@ -140,10 +140,10 @@ Prod-s -Command "vserver object-store-server user delete -vserver <svm_name> -us
 ### Manage S3 Groups
 ```powershell
 # Create group with policy
-Prod-s -Command "vserver object-store-server group create -vserver <svm_name> -name <group_name> -users <user1>,<user2> -policies <policy_name>"
+<cluster-ssh> -Command "vserver object-store-server group create -vserver <svm_name> -name <group_name> -users <user1>,<user2> -policies <policy_name>"
 
 # Show groups
-Prod-s -Command "vserver object-store-server group show -vserver <svm_name>"
+<cluster-ssh> -Command "vserver object-store-server group show -vserver <svm_name>"
 ```
 
 ### Manage S3 Policies
@@ -157,32 +157,32 @@ Prod-s -Command "vserver object-store-server group show -vserver <svm_name>"
 # Built-in policies: FullAccess, NoS3Access, ReadOnlyAccess (all read-only!)
 
 # Create custom policy
-Prod-s -Command "vserver object-store-server policy create -vserver <svm_name> -policy <policy_name>"
+<cluster-ssh> -Command "vserver object-store-server policy create -vserver <svm_name> -policy <policy_name>"
 
 # Add policy statement (NO -principal, use groups to link users)
 # For full bucket admin (create/delete/manage buckets + objects):
-Prod-s -Command "vserver object-store-server policy statement create -vserver <svm_name> -policy <policy_name> -effect allow -action GetObject,PutObject,DeleteObject,ListBucket,GetBucketAcl,GetObjectAcl,ListBucketMultipartUploads,ListMultipartUploadParts,ListAllMyBuckets,CreateBucket,DeleteBucket,GetBucketLocation -resource *"
+<cluster-ssh> -Command "vserver object-store-server policy statement create -vserver <svm_name> -policy <policy_name> -effect allow -action GetObject,PutObject,DeleteObject,ListBucket,GetBucketAcl,GetObjectAcl,ListBucketMultipartUploads,ListMultipartUploadParts,ListAllMyBuckets,CreateBucket,DeleteBucket,GetBucketLocation -resource *"
 
 # For read-only access to a specific bucket:
-Prod-s -Command "vserver object-store-server policy statement create -vserver <svm_name> -policy <policy_name> -effect allow -action GetObject,ListBucket -resource <bucket_name>"
+<cluster-ssh> -Command "vserver object-store-server policy statement create -vserver <svm_name> -policy <policy_name> -effect allow -action GetObject,ListBucket -resource <bucket_name>"
 
 # Show policies
-Prod-s -Command "vserver object-store-server policy show -vserver <svm_name>"
+<cluster-ssh> -Command "vserver object-store-server policy show -vserver <svm_name>"
 
 # Show policy statements
-Prod-s -Command "vserver object-store-server policy statement show -vserver <svm_name> -policy <policy_name>"
+<cluster-ssh> -Command "vserver object-store-server policy statement show -vserver <svm_name> -policy <policy_name>"
 
 # Delete policy
-Prod-s -Command "vserver object-store-server policy delete -vserver <svm_name> -policy <policy_name>"
+<cluster-ssh> -Command "vserver object-store-server policy delete -vserver <svm_name> -policy <policy_name>"
 ```
 
 ### Bucket Access Policies
 ```powershell
 # Add access rule to bucket
-Prod-s -Command "vserver object-store-server bucket policy add-statement -vserver <svm_name> -bucket <bucket_name> -effect allow -action GetObject,PutObject,DeleteObject,ListBucket,GetBucketAcl,GetObjectAcl,ListBucketMultipartUploads,ListMultipartUploadParts -principal <user> -resource <bucket_name>,<bucket_name>/*"
+<cluster-ssh> -Command "vserver object-store-server bucket policy add-statement -vserver <svm_name> -bucket <bucket_name> -effect allow -action GetObject,PutObject,DeleteObject,ListBucket,GetBucketAcl,GetObjectAcl,ListBucketMultipartUploads,ListMultipartUploadParts -principal <user> -resource <bucket_name>,<bucket_name>/*"
 
 # Show bucket policy
-Prod-s -Command "vserver object-store-server bucket policy show -vserver <svm_name> -bucket <bucket_name>"
+<cluster-ssh> -Command "vserver object-store-server bucket policy show -vserver <svm_name> -bucket <bucket_name>"
 ```
 
 ### SnapMirror S3 (Bucket-Level Replication)
@@ -192,24 +192,24 @@ Prod-s -Command "vserver object-store-server bucket policy show -vserver <svm_na
 # Prerequisites: cluster peering, SVM peering, S3 servers on both sides, root user keys
 
 # Verify root user keys exist on both SVMs
-Prod-s -Command "vserver object-store-server user show -vserver <source_svm>"
-Dr-s -Command "vserver object-store-server user show -vserver <dest_svm>"
+<cluster-ssh> -Command "vserver object-store-server user show -vserver <source_svm>"
+<cluster-ssh> -Command "vserver object-store-server user show -vserver <dest_svm>"
 
 # Create SnapMirror S3 policy (or use default "Continuous")
-Prod-s -Command "snapmirror policy create -vserver <svm_name> -policy <policy_name> -type continuous -rpo 3600"
+<cluster-ssh> -Command "snapmirror policy create -vserver <svm_name> -policy <policy_name> -type continuous -rpo 3600"
 
 # Install CA certificates cross-cluster
-Prod-s -Command "security certificate install -type server-ca -vserver <admin_svm> -cert-name <dest_cert>"
-Dr-s -Command "security certificate install -type server-ca -vserver <admin_svm> -cert-name <source_cert>"
+<cluster-ssh> -Command "security certificate install -type server-ca -vserver <admin_svm> -cert-name <dest_cert>"
+<cluster-ssh> -Command "security certificate install -type server-ca -vserver <admin_svm> -cert-name <source_cert>"
 
 # Create SnapMirror S3 relationship (note bucket path syntax)
-Prod-s -Command "snapmirror create -source-path <source_svm>:/bucket/<source_bucket> -destination-path <dest_svm>:/bucket/<dest_bucket> -policy <policy_name>"
+<cluster-ssh> -Command "snapmirror create -source-path <source_svm>:/bucket/<source_bucket> -destination-path <dest_svm>:/bucket/<dest_bucket> -policy <policy_name>"
 
 # Initialize
-Prod-s -Command "snapmirror initialize -destination-path <dest_svm>:/bucket/<dest_bucket>"
+<cluster-ssh> -Command "snapmirror initialize -destination-path <dest_svm>:/bucket/<dest_bucket>"
 
 # Verify
-Prod-s -Command "snapmirror show -fields source-path,destination-path,state,status"
+<cluster-ssh> -Command "snapmirror show -fields source-path,destination-path,state,status"
 ```
 
 **SnapMirror S3 path syntax**: `svm_name:/bucket/bucket_name` (different from SVM-DR colon-only syntax!)
@@ -217,31 +217,31 @@ Prod-s -Command "snapmirror show -fields source-path,destination-path,state,stat
 ### S3 Snapshots (ONTAP 9.16.1+)
 ```powershell
 # Create manual snapshot
-Prod-s -Command "vserver object-store-server bucket snapshot create -vserver <svm_name> -bucket <bucket_name> -snapshot <snap_name>"
+<cluster-ssh> -Command "vserver object-store-server bucket snapshot create -vserver <svm_name> -bucket <bucket_name> -snapshot <snap_name>"
 
 # Assign snapshot policy to bucket
-Prod-s -Command "vserver object-store-server bucket modify -vserver <svm_name> -bucket <bucket_name> -snapshot-policy <policy_name>"
+<cluster-ssh> -Command "vserver object-store-server bucket modify -vserver <svm_name> -bucket <bucket_name> -snapshot-policy <policy_name>"
 
 # Show snapshots
-Prod-s -Command "vserver object-store-server bucket snapshot show -vserver <svm_name> -bucket <bucket_name>"
+<cluster-ssh> -Command "vserver object-store-server bucket snapshot show -vserver <svm_name> -bucket <bucket_name>"
 
 # Delete snapshot
-Prod-s -Command "vserver object-store-server bucket snapshot delete -vserver <svm_name> -bucket <bucket_name> -snapshot <snap_name>"
+<cluster-ssh> -Command "vserver object-store-server bucket snapshot delete -vserver <svm_name> -bucket <bucket_name> -snapshot <snap_name>"
 ```
 
 ### S3 Auditing
 ```powershell
 # Create audit config
-Prod-s -Command "vserver object-store-server audit create -vserver <svm_name> -destination <log_path>"
+<cluster-ssh> -Command "vserver object-store-server audit create -vserver <svm_name> -destination <log_path>"
 
 # Enable auditing
-Prod-s -Command "vserver object-store-server audit enable -vserver <svm_name>"
+<cluster-ssh> -Command "vserver object-store-server audit enable -vserver <svm_name>"
 
 # Select buckets to audit
-Prod-s -Command "vserver object-store-server audit event-selector create -vserver <svm_name> -bucket <bucket_name>"
+<cluster-ssh> -Command "vserver object-store-server audit event-selector create -vserver <svm_name> -bucket <bucket_name>"
 
 # Show audit config
-Prod-s -Command "vserver object-store-server audit show -vserver <svm_name>"
+<cluster-ssh> -Command "vserver object-store-server audit show -vserver <svm_name>"
 ```
 
 ### Enable SVM Management Access on S3 LIF
@@ -252,15 +252,15 @@ When DevOps or external users need to manage the SVM (SSH/HTTPS/ONTAPI) via the 
 
 ```powershell
 # Check current service policy
-Prod-s -Command "network interface service-policy show -vserver <svm_name> -policy <policy_name>"
+<cluster-ssh> -Command "network interface service-policy show -vserver <svm_name> -policy <policy_name>"
 
 # Add management services (requires advanced privilege)
-Prod-s -Command "set adv -c off; network interface service-policy add-service -vserver <svm_name> -policy <policy_name> -service management-ssh"
-Prod-s -Command "set adv -c off; network interface service-policy add-service -vserver <svm_name> -policy <policy_name> -service management-https"
-Prod-s -Command "set adv -c off; network interface service-policy add-service -vserver <svm_name> -policy <policy_name> -service management-http"
+<cluster-ssh> -Command "set adv -c off; network interface service-policy add-service -vserver <svm_name> -policy <policy_name> -service management-ssh"
+<cluster-ssh> -Command "set adv -c off; network interface service-policy add-service -vserver <svm_name> -policy <policy_name> -service management-https"
+<cluster-ssh> -Command "set adv -c off; network interface service-policy add-service -vserver <svm_name> -policy <policy_name> -service management-http"
 
 # Verify
-Prod-s -Command "network interface service-policy show -vserver <svm_name> -policy <policy_name>"
+<cluster-ssh> -Command "network interface service-policy show -vserver <svm_name> -policy <policy_name>"
 ```
 
 ### Create Vserver Login for SVM Management
@@ -268,16 +268,16 @@ Create a dedicated vserver-level login so DevOps can manage the SVM via SSH/HTTP
 
 ```powershell
 # Create SSH login (will prompt for password)
-Prod-s -Command "security login create -vserver <svm_name> -user-or-group-name <username> -application ssh -authentication-method password -role vsadmin"
+<cluster-ssh> -Command "security login create -vserver <svm_name> -user-or-group-name <username> -application ssh -authentication-method password -role vsadmin"
 
 # Create HTTP login (reuses same password)
-Prod-s -Command "security login create -vserver <svm_name> -user-or-group-name <username> -application http -authentication-method password -role vsadmin"
+<cluster-ssh> -Command "security login create -vserver <svm_name> -user-or-group-name <username> -application http -authentication-method password -role vsadmin"
 
 # Create ONTAPI login (reuses same password)
-Prod-s -Command "security login create -vserver <svm_name> -user-or-group-name <username> -application ontapi -authentication-method password -role vsadmin"
+<cluster-ssh> -Command "security login create -vserver <svm_name> -user-or-group-name <username> -application ontapi -authentication-method password -role vsadmin"
 
 # Verify
-Prod-s -Command "security login show -vserver <svm_name>"
+<cluster-ssh> -Command "security login show -vserver <svm_name>"
 ```
 
 ### Full Workflow: Create DevOps S3 User with Bucket Auto-Provisioning
@@ -285,9 +285,9 @@ Complete end-to-end procedure for giving DevOps automated S3 bucket management:
 
 ```powershell
 # 1. Add management services to LIF service policy (advanced priv)
-Prod-s -Command "set adv -c off; network interface service-policy add-service -vserver <svm_name> -policy <service_policy> -service management-ssh"
-Prod-s -Command "set adv -c off; network interface service-policy add-service -vserver <svm_name> -policy <service_policy> -service management-https"
-Prod-s -Command "set adv -c off; network interface service-policy add-service -vserver <svm_name> -policy <service_policy> -service management-http"
+<cluster-ssh> -Command "set adv -c off; network interface service-policy add-service -vserver <svm_name> -policy <service_policy> -service management-ssh"
+<cluster-ssh> -Command "set adv -c off; network interface service-policy add-service -vserver <svm_name> -policy <service_policy> -service management-https"
+<cluster-ssh> -Command "set adv -c off; network interface service-policy add-service -vserver <svm_name> -policy <service_policy> -service management-http"
 
 # 2. Create S3 user via REST API (to capture secret key)
 $body = @{name = "<s3_username>"; comment = "<description>"} | ConvertTo-Json
@@ -295,23 +295,23 @@ $resp = Invoke-RestMethod -Method POST -Uri "https://<cluster>/api/protocols/s3/
 # SAVE: $resp.records[0].access_key and $resp.records[0].secret_key
 
 # 3. Create custom S3 policy
-Prod-s -Command "vserver object-store-server policy create -vserver <svm_name> -policy <policy_name>"
-Prod-s -Command "vserver object-store-server policy statement create -vserver <svm_name> -policy <policy_name> -effect allow -action GetObject,PutObject,DeleteObject,ListBucket,GetBucketAcl,GetObjectAcl,ListBucketMultipartUploads,ListMultipartUploadParts,ListAllMyBuckets,CreateBucket,DeleteBucket,GetBucketLocation -resource *"
+<cluster-ssh> -Command "vserver object-store-server policy create -vserver <svm_name> -policy <policy_name>"
+<cluster-ssh> -Command "vserver object-store-server policy statement create -vserver <svm_name> -policy <policy_name> -effect allow -action GetObject,PutObject,DeleteObject,ListBucket,GetBucketAcl,GetObjectAcl,ListBucketMultipartUploads,ListMultipartUploadParts,ListAllMyBuckets,CreateBucket,DeleteBucket,GetBucketLocation -resource *"
 
 # 4. Create S3 group (links user to policy)
-Prod-s -Command "vserver object-store-server group create -vserver <svm_name> -name <group_name> -users <s3_username> -policies <policy_name>"
+<cluster-ssh> -Command "vserver object-store-server group create -vserver <svm_name> -name <group_name> -users <s3_username> -policies <policy_name>"
 
 # 5. Create vserver login for SVM management
-Prod-s -Command "security login create -vserver <svm_name> -user-or-group-name <login_username> -application ssh -authentication-method password -role vsadmin"
-Prod-s -Command "security login create -vserver <svm_name> -user-or-group-name <login_username> -application http -authentication-method password -role vsadmin"
-Prod-s -Command "security login create -vserver <svm_name> -user-or-group-name <login_username> -application ontapi -authentication-method password -role vsadmin"
+<cluster-ssh> -Command "security login create -vserver <svm_name> -user-or-group-name <login_username> -application ssh -authentication-method password -role vsadmin"
+<cluster-ssh> -Command "security login create -vserver <svm_name> -user-or-group-name <login_username> -application http -authentication-method password -role vsadmin"
+<cluster-ssh> -Command "security login create -vserver <svm_name> -user-or-group-name <login_username> -application ontapi -authentication-method password -role vsadmin"
 
 # 6. Verify everything
-Prod-s -Command "vserver object-store-server user show -vserver <svm_name>"
-Prod-s -Command "vserver object-store-server group show -vserver <svm_name> -instance"
-Prod-s -Command "vserver object-store-server policy statement show -vserver <svm_name> -policy <policy_name>"
-Prod-s -Command "security login show -vserver <svm_name>"
-Prod-s -Command "network interface service-policy show -vserver <svm_name> -policy <service_policy>"
+<cluster-ssh> -Command "vserver object-store-server user show -vserver <svm_name>"
+<cluster-ssh> -Command "vserver object-store-server group show -vserver <svm_name> -instance"
+<cluster-ssh> -Command "vserver object-store-server policy statement show -vserver <svm_name> -policy <policy_name>"
+<cluster-ssh> -Command "security login show -vserver <svm_name>"
+<cluster-ssh> -Command "network interface service-policy show -vserver <svm_name> -policy <service_policy>"
 ```
 
 ## S3 Cleanup (Before SVM-DR or Decommission)
@@ -320,16 +320,16 @@ Prod-s -Command "network interface service-policy show -vserver <svm_name> -poli
 
 ```powershell
 # 1. Check what exists
-Prod-s -Command "vserver object-store-server show -vserver <svm_name>"
-Prod-s -Command "vserver object-store-server bucket show -vserver <svm_name>"
-Prod-s -Command "vserver object-store-server user show -vserver <svm_name>"
-Prod-s -Command "vserver object-store-server policy show -vserver <svm_name>"
+<cluster-ssh> -Command "vserver object-store-server show -vserver <svm_name>"
+<cluster-ssh> -Command "vserver object-store-server bucket show -vserver <svm_name>"
+<cluster-ssh> -Command "vserver object-store-server user show -vserver <svm_name>"
+<cluster-ssh> -Command "vserver object-store-server policy show -vserver <svm_name>"
 
 # 2. Delete in order: buckets → users → policies → server
-Prod-s -Command "vserver object-store-server bucket delete -vserver <svm_name> -bucket <bucket_name>"
-Prod-s -Command "vserver object-store-server user delete -vserver <svm_name> -user <username>"
-Prod-s -Command "vserver object-store-server policy delete -vserver <svm_name> -policy <policy_name>"
-Prod-s -Command "vserver object-store-server delete -vserver <svm_name>"
+<cluster-ssh> -Command "vserver object-store-server bucket delete -vserver <svm_name> -bucket <bucket_name>"
+<cluster-ssh> -Command "vserver object-store-server user delete -vserver <svm_name> -user <username>"
+<cluster-ssh> -Command "vserver object-store-server policy delete -vserver <svm_name> -policy <policy_name>"
+<cluster-ssh> -Command "vserver object-store-server delete -vserver <svm_name>"
 ```
 
 **Error if S3 remnants exist during SVM-DR**: `"contains either an object store server, object store policy, object store user or object store bucket"`
@@ -340,7 +340,7 @@ Prod-s -Command "vserver object-store-server delete -vserver <svm_name>"
 |---------------|-------|-----|
 | S3 blocks SVM-DR creation | Leftover S3 config on source SVM | Delete S3 objects in order (see cleanup section) |
 | Client access denied | Missing/expired access keys | Regenerate keys, update client config |
-| Certificate error on HTTPS | CA cert not installed or expired | Install/re CA certificate on SVM |
+| Certificate error on HTTPS | CA cert not installed or expired | Install/renew CA certificate on SVM |
 | Bucket creation fails | No aggregates with sufficient space | Add disks or use different aggregate |
 | Time skew error | NTP not configured or >15 min difference | Configure NTP on cluster |
 | Secret key not captured | SSH non-interactive swallows `create`/`regenerate-keys` output | Use ONTAP REST API (`POST /api/protocols/s3/services/{uuid}/users`) — response JSON includes both `access_key` and `secret_key` |
@@ -364,8 +364,8 @@ Playbooks at `ansible/s3-bucket-provision/` for automated S3 bucket provisioning
 | Playbook | Purpose | Credentials |
 |----------|---------|-------------|
 | `provision_s3_bucket_generic.yml` | **Any cluster/SVM** — fully parameterized | Via `-e @vault_file` or `-e ontap_password=...` |
-| `provision_s3_bucket_admin.yml` | s3-cluster cluster admin | `credentials/vault_credentials_s3-cluster_admin.yml` |
-| `provision_s3_bucket_dev.yml` | s3-cluster SVM dev user | `credentials/vault_credentials_s3-cluster_sm_s3_dev.yml` |
+| `provision_s3_bucket_admin.yml` | <cluster-name> cluster admin | `credentials/vault_credentials_<cluster-name>_admin.yml` |
+| `provision_s3_bucket_dev.yml` | <cluster-name> SVM dev user | `credentials/vault_credentials_<cluster-name>_sm_s3_dev.yml` |
 
 ### Prerequisites
 ```bash
@@ -379,22 +379,22 @@ ansible-galaxy collection install netapp.ontap
 
 ```powershell
 # With vault file (vault password in ~/.vault_pass)
-wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c 'export PATH=/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin; cd "/mnt/c/Users/Operator/OneDrive/Documents/code/Netapp-Code-WorkSpace/ansible/s3-bucket-provision"; ansible-playbook provision_s3_bucket_generic.yml -e @credentials/vault_credentials_Prod_admin.yml --vault-password-file ~/.vault_pass -e "ontap_hostname=cluster-prod ontap_vserver=svm_s3_prod bucket_name=my-bucket bucket_size=200GB s3_user=sm_s3_user"'
+wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c 'export PATH=/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin; cd "<workspace-root>/ansible/s3-bucket-provision"; ansible-playbook provision_s3_bucket_generic.yml -e @credentials/vault_credentials_<cluster>_admin.yml --vault-password-file ~/.vault_pass -e "ontap_hostname=<cluster-name> ontap_vserver=<s3-svm> bucket_name=my-bucket bucket_size=200GB s3_user=<s3-user>"'
 
 # With Get-Credential (no vault file needed)
-$pw = & .\credentials\Get-Credential.ps1 -Name "admin_cluster-prod"
-wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c "export PATH=/usr/local/bin:/usr/bin:/bin:`$HOME/.local/bin; cd '/mnt/c/Users/Operator/OneDrive/Documents/code/Netapp-Code-WorkSpace/ansible/s3-bucket-provision'; ansible-playbook provision_s3_bucket_generic.yml -e 'ontap_hostname=cluster-prod ontap_vserver=svm_s3_prod ontap_password=$pw bucket_name=my-bucket bucket_size=200GB s3_user=sm_s3_user'"
+$pw = & .\credentials\Get-Credential.ps1 -Name "admin_<cluster-name>"
+wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c "export PATH=/usr/local/bin:/usr/bin:/bin:`$HOME/.local/bin; cd '<workspace-root>/ansible/s3-bucket-provision'; ansible-playbook provision_s3_bucket_generic.yml -e 'ontap_hostname=<cluster-name> ontap_vserver=<s3-svm> ontap_password=$pw bucket_name=my-bucket bucket_size=200GB s3_user=<s3-user>'"
 ```
 
 ### Required Parameters (generic playbook)
 
 | Parameter | Description | Example |
 |-----------|-------------|---------|
-| `ontap_hostname` | Cluster or SVM mgmt LIF | `cluster-prod`, `s3-cluster`, `10.x.x.5` |
-| `ontap_vserver` | SVM name | `svm_s3_prod`, `svm-s3-data` |
+| `ontap_hostname` | Cluster or SVM mgmt LIF | `<cluster-name>`, `<cluster-name>`, `<cluster-ip>` |
+| `ontap_vserver` | SVM name | `<s3-svm>`, `<s3-svm>` |
 | `ontap_password` | ONTAP REST API password | via vault file or `-e` |
 | `bucket_name` | Bucket name | `devops-artifacts` |
-| `s3_user` | S3 object store user for bucket policy | `sm_s3_user`, `sm_s3_dev` |
+| `s3_user` | S3 object store user for bucket policy | `<s3-user>`, `sm_s3_dev` |
 | `bucket_size` | Size (human-readable, default 100GB) | `200GB`, `1TB` |
 
 ### Credential Management
@@ -402,9 +402,9 @@ wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c "export PATH=/usr/local/bin:/u
 #### Vault files (ansible-vault encrypted)
 ```
 credentials/
-├── vault_credentials_Prod_admin.yml         # cluster-prod admin
-├── vault_credentials_s3-cluster_admin.yml   # s3-cluster admin
-├── vault_credentials_s3-cluster_sm_s3_dev.yml # s3-cluster SVM user
+├── vault_credentials_<cluster>_admin.yml         # <cluster-name> admin
+├── vault_credentials_<cluster-name>_admin.yml   # <cluster-name> admin
+├── vault_credentials_<cluster-name>_sm_s3_dev.yml # <cluster-name> SVM user
 └── vault_template.yml                      # Template
 ```
 
@@ -417,7 +417,7 @@ The vault master password is NOT an ONTAP password — it's a separate key.
 #### Quick-set a vault ONTAP password
 ```bash
 wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c 'export PATH=/usr/local/bin:/usr/bin:/bin:$HOME/.local/bin; \
-  cd "/mnt/c/Users/Operator/OneDrive/Documents/code/Netapp-Code-WorkSpace/ansible/s3-bucket-provision"; \
+  cd "<workspace-root>/ansible/s3-bucket-provision"; \
   ansible-vault decrypt VAULT_FILE.yml --vault-password-file ~/.vault_pass 2>/dev/null; \
   read -sp "Enter ONTAP password: " PW; echo; \
   echo "---" > VAULT_FILE.yml; echo "ontap_password: \"$PW\"" >> VAULT_FILE.yml; \
@@ -427,7 +427,7 @@ wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c 'export PATH=/usr/local/bin:/u
 #### View vault via Get-Credential (no ~/.vault_pass needed)
 ```powershell
 $vaultPw = & .\credentials\Get-Credential.ps1 -Name "vault_key"
-wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c "export PATH=/usr/local/bin:/usr/bin:/bin:`$HOME/.local/bin; cd '/mnt/c/Users/Operator/OneDrive/Documents/code/Netapp-Code-WorkSpace/ansible/s3-bucket-provision'; echo '$vaultPw' | ansible-vault view credentials/vault_credentials_Prod_admin.yml --vault-password-file /dev/stdin"
+wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c "export PATH=/usr/local/bin:/usr/bin:/bin:`$HOME/.local/bin; cd '<workspace-root>/ansible/s3-bucket-provision'; echo '$vaultPw' | ansible-vault view credentials/vault_credentials_<cluster>_admin.yml --vault-password-file /dev/stdin"
 ```
 
 ### Key Lessons Learned
@@ -440,11 +440,11 @@ If `data-s3-server` is in the same service policy as `management-https`, S3 take
 net int modify -vserver <svm> -lif <mgmt_lif> -service-policy default-management
 ```
 
-Reference: cluster-prod's `svm_s3_prod` does this correctly — S3 policy has NO management services.
+Reference: <cluster-name>'s `<s3-svm>` does this correctly — S3 policy has NO management services.
 
 #### ONTAP admin user vs S3 object store user
 - **ONTAP admin** (`admin`, `svm_s3_dev`): authenticates via REST API to create/manage buckets
-- **S3 object store user** (`sm_s3_user`, `sm_s3_dev`): referenced by name in bucket policies, authenticates via access key + secret key from S3 clients
+- **S3 object store user** (`<s3-user>`, `sm_s3_dev`): referenced by name in bucket policies, authenticates via access key + secret key from S3 clients
 
 The playbook uses ONTAP admin credentials and only writes the S3 username into the bucket policy. No S3 access keys are needed.
 
@@ -473,7 +473,7 @@ WSL2 NAT can't reach corporate subnets (10.x.x.x). Fix: `C:\Users\<you>\.wslconf
 - [S3 ONTAP Detailed Reference](./references/s3-ontap-reference.md)
 - [S3 Client Operations — AWS CLI, Scripts & Troubleshooting](./references/s3-client-operations.md)
 - [Ansible Playbook — S3 Bucket Provisioning](../../ansible/s3-bucket-provision/)
-- [S3 PowerShell Scripts Library](C:\Users\Operator\OneDrive%20-%20MYORG\Documents\code\MyOrg\S3\generic\)
+- [S3 PowerShell Scripts Library](<path-to-s3-scripts>/)
 - [na_ontap_s3_buckets module](https://docs.ansible.com/ansible/latest/collections/netapp/ontap/na_ontap_s3_buckets_module.html)
 - [na_ontap_s3_users module](https://docs.ansible.com/ansible/latest/collections/netapp/ontap/na_ontap_s3_users_module.html)
 - [na_ontap_s3_services module](https://docs.ansible.com/ansible/latest/collections/netapp/ontap/na_ontap_s3_services_module.html)

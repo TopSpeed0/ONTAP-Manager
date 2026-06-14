@@ -110,7 +110,7 @@ qos policy-group create -policy-group <name> -vserver <svm> -min-throughput <iop
 ```
 
 ## FabricPool (Cloud Tiering)
-- Automatically tiers c data to cloud storage (S3, Azure Blob, etc.)
+- Automatically tiers cold data to cloud storage (S3, Azure Blob, etc.)
 - Tiering policies: `none`, `snapshot-only`, `auto`, `all`
 - Source volumes on FabricPool aggregates replicate to FabricPool on destination
 

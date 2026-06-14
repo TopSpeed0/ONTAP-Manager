@@ -7,7 +7,7 @@ argument-hint: 'Specify operation (create, resize, move) and volume details'
 # Volume Management
 
 ## When to Use
-- Creating  volumes on a cluster
+- Creating new volumes on a cluster
 - Resizing, moving, or modifying existing volumes
 - Changing volume properties (junction path, export policy, snapshot policy, tiering)
 - Volume clone operations
@@ -27,73 +27,73 @@ argument-hint: 'Specify operation (create, resize, move) and volume details'
 
 ### Step 0 — Gather Requirements
 Ask the user:
-1. **Cluster** (cluster-prod or cluster-dr)
+1. **Cluster** (<cluster-name> or <cluster-name>)
 2. **SVM** (vserver) for the volume
 3. **Operation** (create, resize, move, etc.)
 4. For create: volume name, size, aggregate, protocol (NFS/CIFS/iSCSI), junction path
 
 ### List Existing Volumes
 ```powershell
-Get-ProdCsv -Command "vol show -vserver <svm> -fields volume,size,used,percent-used,aggregate,state,junction-path,type"
+Get-<Prefix>Csv -Command "vol show -vserver <svm> -fields volume,size,used,percent-used,aggregate,state,junction-path,type"
 ```
 
 ### Create a Volume
 ```powershell
 # NAS volume with junction path
-Prod-s -Command "vol create -vserver <svm> -volume <vol_name> -aggregate <aggr> -size <size> -junction-path /<path> -security-style unix -space-guarantee none"
+<cluster-ssh> -Command "vol create -vserver <svm> -volume <vol_name> -aggregate <aggr> -size <size> -junction-path /<path> -security-style unix -space-guarantee none"
 
 # SAN volume (no junction path)
-Prod-s -Command "vol create -vserver <svm> -volume <vol_name> -aggregate <aggr> -size <size> -space-guarantee none"
+<cluster-ssh> -Command "vol create -vserver <svm> -volume <vol_name> -aggregate <aggr> -size <size> -space-guarantee none"
 ```
 
 ### Resize a Volume
 ```powershell
-Prod-s -Command "vol size -vserver <svm> -volume <vol_name> --size <size>"
+<cluster-ssh> -Command "vol size -vserver <svm> -volume <vol_name> -new-size <size>"
 ```
 
 ### Move a Volume
 ```powershell
 # Start volume move
-Prod-s -Command "vol move start -vserver <svm> -volume <vol_name> -destination-aggregate <dest-aggr>"
+<cluster-ssh> -Command "vol move start -vserver <svm> -volume <vol_name> -destination-aggregate <dest-aggr>"
 
 # Check move status
-Get-ProdCsv -Command "vol move show -fields volume,vserver,state,phase,percent-complete"
+Get-<Prefix>Csv -Command "vol move show -fields volume,vserver,state,phase,percent-complete"
 ```
 
 ### Modify Volume Properties
 ```powershell
 # Change junction path
-Prod-s -Command "vol mount -vserver <svm> -volume <vol_name> -junction-path /<-path>"
+<cluster-ssh> -Command "vol mount -vserver <svm> -volume <vol_name> -junction-path /<new-path>"
 
 # Change export policy
-Prod-s -Command "vol modify -vserver <svm> -volume <vol_name> -policy <export-policy-name>"
+<cluster-ssh> -Command "vol modify -vserver <svm> -volume <vol_name> -policy <export-policy-name>"
 
 # Change snapshot policy
-Prod-s -Command "vol modify -vserver <svm> -volume <vol_name> -snapshot-policy <policy-name>"
+<cluster-ssh> -Command "vol modify -vserver <svm> -volume <vol_name> -snapshot-policy <policy-name>"
 
 # Change tiering policy
-Prod-s -Command "vol modify -vserver <svm> -volume <vol_name> -tiering-policy auto"
+<cluster-ssh> -Command "vol modify -vserver <svm> -volume <vol_name> -tiering-policy auto"
 
 # Set autosize
-Prod-s -Command "vol autosize -vserver <svm> -volume <vol_name> -mode grow_shrink -maximum-size <max> -grow-thresh-percent 85 -shrink-thresh-percent 50"
+<cluster-ssh> -Command "vol autosize -vserver <svm> -volume <vol_name> -mode grow_shrink -maximum-size <max> -grow-threshold-percent 85 -shrink-threshold-percent 50"
 ```
 
 ### Volume Clone
 ```powershell
-Prod-s -Command "vol clone create -vserver <svm> -flexclone <clone_name> -parent-volume <parent_vol>"
+<cluster-ssh> -Command "vol clone create -vserver <svm> -flexclone <clone_name> -parent-volume <parent_vol>"
 ```
 
 ### Delete a Volume
 **WARNING:** Confirm with user before running.
 ```powershell
 # Unmount first
-Prod-s -Command "vol unmount -vserver <svm> -volume <vol_name>"
+<cluster-ssh> -Command "vol unmount -vserver <svm> -volume <vol_name>"
 
 # Take offline
-Prod-s -Command "vol offline -vserver <svm> -volume <vol_name>"
+<cluster-ssh> -Command "vol offline -vserver <svm> -volume <vol_name>"
 
 # Destroy
-Prod-s -Command "vol destroy -vserver <svm> -volume <vol_name>"
+<cluster-ssh> -Command "vol destroy -vserver <svm> -volume <vol_name>"
 ```
 
 ## Safety

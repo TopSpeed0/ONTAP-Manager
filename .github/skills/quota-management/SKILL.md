@@ -29,25 +29,25 @@ argument-hint: 'Specify qtree name or operation (report, resize)'
 
 ### Step 0 — Gather Requirements
 Ask the user:
-1. **Cluster** (cluster-prod or cluster-dr)
-2. **SVM** (default: `svm_nas_prod` on cluster-prod)
+1. **Cluster** (<cluster-name> or <cluster-name>)
+2. **SVM** (default: `<svm-name>` on <cluster-name>)
 3. **Operation**: report (view usage) or resize (change limits)
-4. For resize: qtree name(s),  DiskLimit,  SoftDiskLimit
+4. For resize: qtree name(s), new DiskLimit, new SoftDiskLimit
 
-### View Quota Report (all qtrees above thresh)
+### View Quota Report (all qtrees above threshold)
 ```powershell
 # Connect to cluster
-Prod  # or: Connect-NcController -Name cluster-prod
+<alias>  # or: Connect-NcController -Name <cluster-name>
 
 # Get full quota report
 $report = Get-NcQuotaReport
 
 # Filter by percentage used (e.g., > 90%)
-$thresh = 90
+$threshold = 90
 $report | ForEach-Object {
     if ($_.DiskLimit -ne "-" -and [long]$_.DiskLimit -gt 0) {
         $pctUsed = ($_.DiskUsed / $_.DiskLimit) * 100
-        if ($pctUsed -ge $thresh) {
+        if ($pctUsed -ge $threshold) {
             $_ | Add-Member -MemberType NoteProperty -Name PercentageUsed -Value ("{0:N1}%" -f $pctUsed) -Force
             $_
         }
@@ -61,23 +61,23 @@ $report | ForEach-Object {
 
 ### View Quota for Specific Qtree
 ```powershell
-Get-NcQuota -Vserver svm_nas_prod -Qtree <qtree_name> -Volume <volume>
-Get-NcQuotaReport -Vserver svm_nas_prod -Qtree <qtree_name>
+Get-NcQuota -Vserver <svm-name> -Qtree <qtree_name> -Volume <volume>
+Get-NcQuotaReport -Vserver <svm-name> -Qtree <qtree_name>
 ```
 
 ### Resize a Qtree Quota
 ```powershell
 # 1. Get the quota object
-$quota = Get-NcQuota -Vserver svm_nas_prod -Qtree <qtree_name> -Volume <volume> -Target "/vol/<volume>/<qtree>"
+$quota = Get-NcQuota -Vserver <svm-name> -Qtree <qtree_name> -Volume <volume> -Target "/vol/<volume>/<qtree>"
 
 # 2. Set the QuotaTarget (REQUIRED — must not be null)
 $quota.QuotaTarget = "/vol/<volume>/<qtree>"
 
-# 3. Apply  limits (capture output to avoid pipeline leak)
+# 3. Apply new limits (capture output to avoid pipeline leak)
 $result = $quota | Set-NcQuota -DiskLimit "<size>gb" -SoftDiskLimit "<size>gb" -ErrorAction Stop
 
 # 4. Activate the change
-Start-NcQuotaResize -VserverContext svm_nas_prod -Volume <volume>
+Start-NcQuotaResize -VserverContext <svm-name> -Volume <volume>
 ```
 
 ### Auto-Recovery on Resize Failure
@@ -110,7 +110,7 @@ The full interactive quota manager script is at:
 `Clusters Quota Policy Manger.ps1` (workspace root level, under `scripts/quota/`)
 
 It provides:
-- Percentage-based filtering (user picks thresh)
+- Percentage-based filtering (user picks threshold)
 - Out-GridView qtree selection (or filter by name)
 - Interactive DiskLimit / SoftDiskLimit input (gb/tb)
 - Auto-recovery on `Start-NcQuotaResize` failure

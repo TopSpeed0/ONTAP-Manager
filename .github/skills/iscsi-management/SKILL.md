@@ -70,10 +70,10 @@ Example output:
 ```
 vserver          tpgroup                tsih
 ---------------- ---------------------- ----
-svm_s3_iscsi svm_s3_iscsi_lif_1 1
-svm_s3_iscsi svm_s3_iscsi_lif_2 1
-svm_s3_iscsi svm_s3_iscsi_lif_3 2
-svm_s3_iscsi svm_s3_iscsi_lif_4 2
+<svm>_iscsi <svm>_iscsi_lif_1 1
+<svm>_iscsi <svm>_iscsi_lif_2 1
+<svm>_iscsi <svm>_iscsi_lif_3 2
+<svm>_iscsi <svm>_iscsi_lif_4 2
 ```
 
 **Step 2**: For each (tpgroup, TSIH) pair, query the connection to get remote-address:
@@ -114,7 +114,7 @@ For automated cross-referencing across all initiators, use this PowerShell appro
 ```powershell
 # Step 1: Get all sessions
 $sessions = <SSH> -Command "iscsi session show -vserver <SVM> -fields tpgroup,tsih,initiator-name,initiator-alias,isid" | 
-    # Parse the output into objects (use Get-ProdCsv pattern for cluster-prod)
+    # Parse the output into objects (use Get-<Prefix>Csv pattern for <cluster-name>)
 
 # Step 2: Get all connections  
 $connections = <SSH> -Command "vserver iscsi connection show -vserver <SVM> -fields tpgroup,tsih,remote-address,local-address" |
@@ -124,14 +124,14 @@ $connections = <SSH> -Command "vserver iscsi connection show -vserver <SVM> -fie
 # Match each session to its connection by tpgroup + tsih
 ```
 
-## LIF-to-tpgroup Mapping (s3-cluster reference)
+## LIF-to-tpgroup Mapping (<cluster-name> reference)
 
 | tpgroup | LIF IP | Node | Port | VLAN |
 |---------|--------|------|------|------|
-| svm_s3_iscsi_lif_1 | 10.x.x.10 | cluster-s3-01 | a0b-3005 | iSCSI dedicated |
-| svm_s3_iscsi_lif_2 | 10.x.x.11 | cluster-s3-02 | a0b-3005 | iSCSI dedicated |
-| svm_s3_iscsi_lif_3 | 10.x.x.12 | cluster-s3-01 | a0a-3003 | data network |
-| svm_s3_iscsi_lif_4 | 10.x.x.13 | cluster-s3-02 | a0a-3003 | data network |
+| <svm>_iscsi_lif_1 | <iscsi-lif-ip> | <node-01> | a0b-3005 | iSCSI dedicated |
+| <svm>_iscsi_lif_2 | <iscsi-lif-ip> | <node-02> | a0b-3005 | iSCSI dedicated |
+| <svm>_iscsi_lif_3 | <iscsi-lif-ip> | <node-01> | a0a-3003 | data network |
+| <svm>_iscsi_lif_4 | <iscsi-lif-ip> | <node-02> | a0a-3003 | data network |
 
 ## Important Notes
 - `node` is **not a valid `-fields` argument** for session or connection show; use `-instance` to see hosting node

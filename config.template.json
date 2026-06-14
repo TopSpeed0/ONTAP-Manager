@@ -14,7 +14,8 @@
       "Alias": "",
       "CsvPrefix": "",
       "Description": "",
-      "FallbackIP": ""
+      "FallbackIP": "",
+      "VIP": false
     }
   ]
 }

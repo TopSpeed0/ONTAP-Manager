@@ -1,18 +1,18 @@
 ---
 name: pdf-knowledge-import
-description: 'Extract knowledge from NetApp PDF documentation and update skill reference files. Use when: user adds a  PDF, user asks to import PDF, update references from documentation, extract PDF content, process  documentation, add PDF knowledge to skills.'
+description: 'Extract knowledge from NetApp PDF documentation and update skill reference files. Use when: user adds a new PDF, user asks to import PDF, update references from documentation, extract PDF content, process new documentation, add PDF knowledge to skills.'
 argument-hint: 'Specify PDF filename and which skill(s) to update'
 ---
 
 # PDF Knowledge Import
 
 ## When to Use
-- User has added a  PDF to the `./PDF/` fer
+- User has added a new PDF to the `./PDF/` folder
 - User asks to update skills with content from a PDF
 - User wants to extract best practices, CLI commands, or procedures from NetApp documentation
 
 ## Prerequisites
-- PDFs must be placed in the `./PDF/` fer at the workspace root
+- PDFs must be placed in the `./PDF/` folder at the workspace root
 - Python with `pymupdf` is required for extraction
 
 ## Procedure
@@ -61,7 +61,7 @@ Match sections to skills:
 | Cluster health, nodes, aggregates, overview | `ontap-cluster-info` | `ontap-cluster-info/references/` |
 
 ### Step 5 — Create or Update Reference Files
-For each relevant section extracted, create a  reference file in the appropriate skill's `references/` fer:
+For each relevant section extracted, create a new reference file in the appropriate skill's `references/` folder:
 
 ```
 .github/skills/<skill-name>/references/<descriptive-name>.md
@@ -82,7 +82,7 @@ Reference file format:
 ```
 
 ### Step 6 — Update SKILL.md (if needed)
-If the PDF introduces  concepts or procedures not covered in the existing SKILL.md, add them to the relevant skill's body.
+If the PDF introduces new concepts or procedures not covered in the existing SKILL.md, add them to the relevant skill's body.
 
 ### Step 7 — Confirm with User
 Show the user what was extracted and which skills were updated.

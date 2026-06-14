@@ -32,7 +32,7 @@
 ## Volume Creation Requirements
 
 - SVM and aggregate must already exist
-- Must include a **junction path** for NAS data access (directly under root `/_vol` or existing dir `/existing_dir/_vol`)
+- Must include a **junction path** for NAS data access (directly under root `/new_vol` or existing dir `/existing_dir/new_vol`)
 - If aggregate list is configured on SVM, aggregate must be in the list
 
 ### Create Syntax
@@ -52,7 +52,7 @@ volume create -vserver <svm> -volume <name> -aggregate <aggr> -is-large-size-ena
 
 ### Resize
 ```
-volume size -vserver <svm> -volume <name> --size <size>
+volume size -vserver <svm> -volume <name> -new-size <size>
 ```
 
 ### Move (Non-disruptive)
@@ -74,7 +74,7 @@ volume modify -vserver <svm> -volume <name> [-policy <export_policy>] [-snapshot
 
 ### Autosize
 ```
-volume autosize -vserver <svm> -volume <name> -mode {off|grow|grow_shrink} -maximum-size <max> -grow-thresh-percent <pct> -shrink-thresh-percent <pct>
+volume autosize -vserver <svm> -volume <name> -mode {off|grow|grow_shrink} -maximum-size <max> -grow-threshold-percent <pct> -shrink-threshold-percent <pct>
 ```
 
 ### Clone
@@ -114,7 +114,7 @@ volume rehost -vserver <source_svm> -volume <name> -destination-vserver <dest_sv
 |--------|----------|
 | `none` | Data stays on performance tier |
 | `snapshot-only` | Only snapshot data moves to cloud |
-| `auto` | C data from snapshots and active file system moves to cloud |
+| `auto` | Cold data from snapshots and active file system moves to cloud |
 | `all` | All data moves to cloud |
 
 ## Snapshot Policies

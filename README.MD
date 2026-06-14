@@ -2,12 +2,29 @@
 
 AI-assisted automation workspace for NetApp ONTAP cluster administration. Combines PowerShell SSH/CSV helpers, the DataONTAP PowerShell Toolkit, a curated case knowledge base, and a library of domain skills used by GitHub Copilot agents.
 
-<!-- CLUSTER-TABLE:START - Auto-generated from config.json by Update-ReadmeClusterTable.ps1. Do not edit manually. -->
-## Clusters
+## Quick Start
 
-> Table auto-populated from `config.json` when `Load-Config.ps1` runs.
-> Copy `config.template.json` → `config.json` and fill in your cluster details.
-<!-- CLUSTER-TABLE:END -->
+```powershell
+# 1. Clone the repo
+git clone <repo-url> && cd Netapp-Code-WorkSpace
+
+# 2. First run — creates config.json from template automatically
+. .\Load-Config.ps1
+# ⚠ Edit config.json with your real cluster names, then re-run:
+. .\Load-Config.ps1
+
+# 3. You're ready — every cluster now has auto-generated functions:
+Prod-s -Command "vol show"           # SSH one-liner
+Get-A1kCsv -Command "vol show -fields vserver,volume,size,used"  # CSV → objects
+Prod                                  # Connect-NcController session (ZAPI)
+```
+
+> **What happens on `. .\Load-Config.ps1`?**
+> 1. If `config.json` doesn't exist, copies `config.template.json` → `config.json` and stops
+> 2. Reads `config.json`, builds `$global:ONTAP_Clusters` array
+> 3. Auto-generates per-cluster functions: `<alias>`, `<alias>-s`, `Get-<CsvPrefix>Csv`
+> 4. Sets up ONTAP credentials (Jenkins env vars or interactive fallback)
+> 5. Browse the rich docs UI: `python -m http.server 8080` → open `http://localhost:8080/docs/`
 
 Copy `config.template.json` → `config.json` and fill in your cluster details. `Load-Config.ps1` auto-generates per-cluster functions:
 

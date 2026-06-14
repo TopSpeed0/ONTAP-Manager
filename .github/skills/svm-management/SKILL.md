@@ -7,7 +7,7 @@ argument-hint: 'Specify operation (create, modify, configure protocols) and SVM 
 # SVM (Storage Virtual Machine) Management
 
 ## When to Use
-- Creating a  SVM with NAS or SAN protocols
+- Creating a new SVM with NAS or SAN protocols
 - Configuring data LIFs on an SVM
 - Setting up NFS, CIFS, or iSCSI services
 - Managing export policies and rules
@@ -19,7 +19,7 @@ argument-hint: 'Specify operation (create, modify, configure protocols) and SVM 
 - Each SVM has a **unique namespace** built from volumes mounted at junction points
 - Root volume = entry point to namespace; needs ≥1 GB space (≥3 GB if NAS auditing)
 - Security styles: `unix` (NFS), `ntfs` (SMB/Hyper-V), `mixed` (multi-protocol)
-- ONTAP 9.13.1+: can set **max capacity** and thresh alerts on SVMs
+- ONTAP 9.13.1+: can set **max capacity** and threshold alerts on SVMs
 - SVM admin role: `vsadmin` (can create custom RBAC roles)
 - For detailed reference, see [ONTAP 9 SVM Reference](./references/svm-ontap-reference.md)
 
@@ -35,76 +35,76 @@ Ask the user:
 
 ### List Existing SVMs
 ```powershell
-Get-ProdCsv -Command "vserver show -fields vserver,type,state,allowed-protocols,admin-state"
+Get-<Prefix>Csv -Command "vserver show -fields vserver,type,state,allowed-protocols,admin-state"
 ```
 
 ### Create an SVM
 ```powershell
-Prod-s -Command "vserver create -vserver <svm_name> -rootvolume <root_vol> -rootvolume-security-style unix -aggregate <aggr>"
+<cluster-ssh> -Command "vserver create -vserver <svm_name> -rootvolume <root_vol> -rootvolume-security-style unix -aggregate <aggr>"
 ```
 
 ### Configure Allowed Protocols
 ```powershell
-Prod-s -Command "vserver modify -vserver <svm_name> -allowed-protocols nfs,cifs"
+<cluster-ssh> -Command "vserver modify -vserver <svm_name> -allowed-protocols nfs,cifs"
 ```
 
 ### Create Data LIFs
 ```powershell
 # NFS/CIFS data LIF
-Prod-s -Command "net int create -vserver <svm_name> -lif <lif_name> -role data -data-protocol nfs,cifs -home-node <node> -home-port <port> -address <ip> -netmask <mask>"
+<cluster-ssh> -Command "net int create -vserver <svm_name> -lif <lif_name> -role data -data-protocol nfs,cifs -home-node <node> -home-port <port> -address <ip> -netmask <mask>"
 
 # iSCSI data LIF
-Prod-s -Command "net int create -vserver <svm_name> -lif <lif_name> -role data -data-protocol iscsi -home-node <node> -home-port <port> -address <ip> -netmask <mask>"
+<cluster-ssh> -Command "net int create -vserver <svm_name> -lif <lif_name> -role data -data-protocol iscsi -home-node <node> -home-port <port> -address <ip> -netmask <mask>"
 ```
 
 ### Configure NFS
 ```powershell
 # Create NFS service
-Prod-s -Command "nfs create -vserver <svm_name> -v3 enabled -v4.0 enabled -v4.1 enabled"
+<cluster-ssh> -Command "nfs create -vserver <svm_name> -v3 enabled -v4.0 enabled -v4.1 enabled"
 
 # Verify
-Prod-s -Command "nfs show -vserver <svm_name>"
+<cluster-ssh> -Command "nfs show -vserver <svm_name>"
 ```
 
 ### Configure CIFS
 ```powershell
 # Create CIFS server (joins AD)
-Prod-s -Command "cifs create -vserver <svm_name> -cifs-server <cifs_name> -domain <ad_domain> -ou <ou_path>"
+<cluster-ssh> -Command "cifs create -vserver <svm_name> -cifs-server <cifs_name> -domain <ad_domain> -ou <ou_path>"
 
 # Verify
-Prod-s -Command "cifs show -vserver <svm_name>"
+<cluster-ssh> -Command "cifs show -vserver <svm_name>"
 ```
 
 ### Configure iSCSI
 ```powershell
 # Create iSCSI service
-Prod-s -Command "iscsi create -vserver <svm_name>"
+<cluster-ssh> -Command "iscsi create -vserver <svm_name>"
 
 # Verify
-Prod-s -Command "iscsi show -vserver <svm_name>"
+<cluster-ssh> -Command "iscsi show -vserver <svm_name>"
 ```
 
 ### Export Policies
 ```powershell
 # Create export policy
-Prod-s -Command "export-policy create -vserver <svm_name> -policyname <policy_name>"
+<cluster-ssh> -Command "export-policy create -vserver <svm_name> -policyname <policy_name>"
 
 # Add rule
-Prod-s -Command "export-policy rule create -vserver <svm_name> -policyname <policy_name> -clientmatch <cidr_or_host> -protocol nfs -rorule sys -rwrule sys -superuser sys"
+<cluster-ssh> -Command "export-policy rule create -vserver <svm_name> -policyname <policy_name> -clientmatch <cidr_or_host> -protocol nfs -rorule sys -rwrule sys -superuser sys"
 
 # Show rules
-Get-ProdCsv -Command "export-policy rule show -vserver <svm_name> -fields policyname,clientmatch,protocol,rorule,rwrule"
+Get-<Prefix>Csv -Command "export-policy rule show -vserver <svm_name> -fields policyname,clientmatch,protocol,rorule,rwrule"
 ```
 
 ### DNS Configuration
 ```powershell
-Prod-s -Command "dns create -vserver <svm_name> -domains <domain> -name-servers <dns_ip1>,<dns_ip2>"
+<cluster-ssh> -Command "dns create -vserver <svm_name> -domains <domain> -name-servers <dns_ip1>,<dns_ip2>"
 ```
 
 ### Delete SVM
 **WARNING:** Confirm with user before running. All volumes and LIFs must be removed first.
 ```powershell
-Prod-s -Command "vserver delete -vserver <svm_name>"
+<cluster-ssh> -Command "vserver delete -vserver <svm_name>"
 ```
 
 ## Safety

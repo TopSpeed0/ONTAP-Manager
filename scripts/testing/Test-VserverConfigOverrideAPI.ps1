@@ -8,8 +8,8 @@
     - If we get HTTP 404 → endpoint doesn't exist, SSH is the only option.
 
 .EXAMPLE
-    .\Test-VserverConfigOverrideAPI.ps1 -ClusterName cluster-dr
-    .\Test-VserverConfigOverrideAPI.ps1 -ClusterName cluster-dr -Credential (Get-Credential)
+    .\Test-VserverConfigOverrideAPI.ps1 -ClusterName <cluster-name>
+    .\Test-VserverConfigOverrideAPI.ps1 -ClusterName <cluster-name> -Credential (Get-Credential)
 #>
 [CmdletBinding()]
 param(
@@ -45,7 +45,7 @@ public class TrustAllCertsPolicy : ICertificatePolicy {
 }
 "@
 }
-[System.Net.ServicePointManager]::CertificatePolicy = [TrustAllCertsPolicy]::()
+[System.Net.ServicePointManager]::CertificatePolicy = [TrustAllCertsPolicy]::new()
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $baseUri = "https://$Cluster"
@@ -74,7 +74,7 @@ catch {
     if ($_.Exception.Response) {
         try {
             $stream = $_.Exception.Response.GetResponseStream()
-            $reader = [System.IO.StreamReader]::($stream)
+            $reader = [System.IO.StreamReader]::new($stream)
             $errorBody = $reader.ReadToEnd()
             $reader.Close()
         } catch {}

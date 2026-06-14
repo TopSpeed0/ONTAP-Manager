@@ -18,7 +18,7 @@ Under default `MirrorAllSnapshots` policy:
 ### How Updates Work
 - Updates are **asynchronous**, following the configured schedule
 - Retention mirrors the snapshot policy on the source
-- Each update: creates snapshot on source → transfers it + any  snapshots since last update
+- Each update: creates snapshot on source → transfers it + any new snapshots since last update
 
 ### Default Policies
 

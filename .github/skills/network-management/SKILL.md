@@ -27,74 +27,74 @@ argument-hint: 'Specify operation (create LIF, show ports, etc.) and target clus
 
 ### Show Network Interfaces (LIFs)
 ```powershell
-Get-ProdCsv -Command "net int show -fields vserver,lif,role,curr-node,curr-port,address,netmask,status-oper,data-protocol"
+Get-<Prefix>Csv -Command "net int show -fields vserver,lif,role,curr-node,curr-port,address,netmask,status-oper,data-protocol"
 ```
 
 ### Show Network Ports
 ```powershell
-Get-ProdCsv -Command "net port show -fields node,port,link,speed,mtu,health-status,broadcast-domain"
+Get-<Prefix>Csv -Command "net port show -fields node,port,link,speed,mtu,health-status,broadcast-domain"
 ```
 
 ### Show Broadcast Domains
 ```powershell
-Get-ProdCsv -Command "net port broadcast-domain show -fields broadcast-domain,mtu,ipspace,ports"
+Get-<Prefix>Csv -Command "net port broadcast-domain show -fields broadcast-domain,mtu,ipspace,ports"
 ```
 
 ### Show Routes
 ```powershell
-Get-ProdCsv -Command "net route show -fields vserver,destination,gateway,metric"
+Get-<Prefix>Csv -Command "net route show -fields vserver,destination,gateway,metric"
 ```
 
 ### Show Failover Groups
 ```powershell
-Get-ProdCsv -Command "net int failover-groups show -fields failover-group,vserver,targets"
+Get-<Prefix>Csv -Command "net int failover-groups show -fields failover-group,vserver,targets"
 ```
 
 ## LIF Operations
 
 ### Create a Data LIF
 ```powershell
-Prod-s -Command "net int create -vserver <svm> -lif <lif_name> -role data -data-protocol <nfs|cifs|iscsi> -home-node <node> -home-port <port> -address <ip> -netmask <mask>"
+<cluster-ssh> -Command "net int create -vserver <svm> -lif <lif_name> -role data -data-protocol <nfs|cifs|iscsi> -home-node <node> -home-port <port> -address <ip> -netmask <mask>"
 ```
 
 ### Modify a LIF
 ```powershell
-Prod-s -Command "net int modify -vserver <svm> -lif <lif_name> -address <_ip> -netmask <mask>"
+<cluster-ssh> -Command "net int modify -vserver <svm> -lif <lif_name> -address <new_ip> -netmask <mask>"
 ```
 
 ### Migrate a LIF
 ```powershell
-Prod-s -Command "net int migrate -vserver <svm> -lif <lif_name> -dest-node <node> -dest-port <port>"
+<cluster-ssh> -Command "net int migrate -vserver <svm> -lif <lif_name> -dest-node <node> -dest-port <port>"
 ```
 
 ### Revert a LIF to Home
 ```powershell
-Prod-s -Command "net int revert -vserver <svm> -lif <lif_name>"
+<cluster-ssh> -Command "net int revert -vserver <svm> -lif <lif_name>"
 ```
 
 ## VLAN and Ifgrp
 
 ### Create VLAN
 ```powershell
-Prod-s -Command "net port vlan create -node <node> -vlan-name <port>-<vlan-id>"
+<cluster-ssh> -Command "net port vlan create -node <node> -vlan-name <port>-<vlan-id>"
 ```
 
 ### Create Interface Group
 ```powershell
-Prod-s -Command "net port ifgrp create -node <node> -ifgrp <ifgrp_name> -mode multimode_lacp -distr-func ip"
-Prod-s -Command "net port ifgrp add-port -node <node> -ifgrp <ifgrp_name> -port <port>"
+<cluster-ssh> -Command "net port ifgrp create -node <node> -ifgrp <ifgrp_name> -mode multimode_lacp -distr-func ip"
+<cluster-ssh> -Command "net port ifgrp add-port -node <node> -ifgrp <ifgrp_name> -port <port>"
 ```
 
 ## Troubleshooting
 
 ### Ping from Node
 ```powershell
-Prod-s -Command "net ping -node <node> -destination <ip> -vrf <ipspace>"
+<cluster-ssh> -Command "net ping -node <node> -destination <ip> -vrf <ipspace>"
 ```
 
 ### Check LIF Status
 ```powershell
-Get-ProdCsv -Command "net int show -fields lif,status-oper,status-admin,is-home,curr-node,curr-port"
+Get-<Prefix>Csv -Command "net int show -fields lif,status-oper,status-admin,is-home,curr-node,curr-port"
 ```
 
 ## Safety

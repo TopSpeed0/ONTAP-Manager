@@ -2,7 +2,7 @@
 # =============================================================================
 # Ansible Playbook: Provision S3 Bucket — Cluster Admin
 # =============================================================================
-# Connects to s3-cluster with cluster admin credentials.
+# Connects to <cluster-name> with cluster admin credentials.
 # Use this for local testing or when SVM LIF lacks REST API service.
 #
 # Usage:
@@ -21,7 +21,7 @@
 #   ansible-galaxy collection install netapp.ontap
 # =============================================================================
 
-- name: Provision S3 Bucket on svm-s3-data (cluster admin)
+- name: Provision S3 Bucket on <s3-svm> (cluster admin)
   hosts: localhost
   gather_facts: false
   connection: local
@@ -31,12 +31,12 @@
 
   vars:
     # --- Connection (cluster admin) ---
-    ontap_hostname: "s3-cluster"
+    ontap_hostname: "<cluster-name>"
     ontap_username: "admin"
     ontap_validate_certs: false
 
     # --- SVM / S3 config ---
-    ontap_vserver: "svm-s3-data"
+    ontap_vserver: "<s3-svm>"
 
     # --- Bucket defaults ---
     bucket_name: ""
@@ -47,7 +47,7 @@
     s3_user: "sm_s3_dev"
 
   vars_files:
-    - credentials/vault_credentials_s3-cluster_admin.yml
+    - credentials/vault_credentials_<cluster-name>_admin.yml
 
   module_defaults:
     group/netapp.ontap.netapp_ontap:
@@ -106,7 +106,7 @@
         msg: |
           Bucket '{{ bucket_name }}' provisioned successfully on {{ ontap_vserver }}
           Size: {{ (bucket_size | int / 1073741824) | round(1) }} GB
-          S3 Endpoint: https://s3-data-svm.example.local/{{ bucket_name }}
+          S3 Endpoint: https://<s3-data-lif-fqdn>/{{ bucket_name }}
           S3 User: {{ s3_user }}
       when: bucket_result is changed
 

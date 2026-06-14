@@ -38,7 +38,7 @@ vserver cifs share show -vserver <svm> -share-name <share>
 ## Existing Script
 
 The function is implemented in:
-`C:\Users\Operator\OneDrive\Documents\code\MyOrg\Netapp\ONTAP\Widelink - DFS\Get-DFSNameSpaceRoot.psm1`
+`<path-to>/Get-DFSNameSpaceRoot.psm1`
 
 ### Aliases available after `Import-Module`
 | Alias | Function |
@@ -50,10 +50,10 @@ The function is implemented in:
 
 ### Usage
 ```powershell
-Import-Module "C:\Users\Operator\OneDrive\Documents\code\MyOrg\Netapp\ONTAP\Widelink - DFS\Get-DFSNameSpaceRoot.psm1"
+Import-Module "<path-to>/Get-DFSNameSpaceRoot.psm1"
 
 # Resolve a DFS path
-Find-DFSPath -share '\\il\dfs\Mng' -Vserver svm_nas_prod
+Find-DFSPath -share '\\il\dfs\Mng' -Vserver <svm-name>
 
 # Output includes:
 # Share, Volume, UnixPath, vserver, LINK, QTREE, CifsServer, SharePath, JunctionPath, Aggregate, Node
@@ -77,11 +77,11 @@ Find-DFSPath -share '\\il\dfs\Mng' -Vserver svm_nas_prod
 ## Key Implementation Notes
 
 ### Toolkit version compatibility
-`Read-NcDirectory -Path "/vol/<volume>"` (volume root) **fails** with er NetApp.ONTAP toolkit versions — it requires at least one subdirectory level (`/vol/<vol>/<dir>`). The current implementation bypasses this by going directly to `Get-NcCifsSymlink -UnixPath "/<link>/"`.
+`Read-NcDirectory -Path "/vol/<volume>"` (volume root) **fails** with newer NetApp.ONTAP toolkit versions — it requires at least one subdirectory level (`/vol/<vol>/<dir>`). The current implementation bypasses this by going directly to `Get-NcCifsSymlink -UnixPath "/<link>/"`.
 
-### Quota units changed in  toolkit
-- ** `DataONTAP` module**: `Get-NcQuotaReport` returns `DiskLimit`/`DiskUsed` in **KB** — multiply by `1KB` before passing to `DisplayInBytes()`
-- ** `NetApp.ONTAP` module**: returns values in **bytes** — pass directly to `DisplayInBytes()`, no multiplication needed
+### Quota units changed in new toolkit
+- **Old `DataONTAP` module**: `Get-NcQuotaReport` returns `DiskLimit`/`DiskUsed` in **KB** — multiply by `1KB` before passing to `DisplayInBytes()`
+- **New `NetApp.ONTAP` module**: returns values in **bytes** — pass directly to `DisplayInBytes()`, no multiplication needed
 - Current code uses bytes (no `* 1KB`). If quota shows as PB when it should be TB, the toolkit changed units.
 
 ### `$` share detection
@@ -98,16 +98,16 @@ $share = $share.split('\\').split('\')
 
 ### Resolve a DFS UNC path
 ```powershell
-Import-Module "C:\Users\Operator\OneDrive\Documents\code\MyOrg\Netapp\ONTAP\Widelink - DFS\Get-DFSNameSpaceRoot.psm1" -Force
-Find-DFSPath -share '\\il\dfs\<LinkName>' -Vserver svm_nas_prod
+Import-Module "<path-to>/Get-DFSNameSpaceRoot.psm1" -Force
+Find-DFSPath -share '\\il\dfs\<LinkName>' -Vserver <svm-name>
 ```
 
 ### List all widelinks on an SVM (ONTAP CLI)
 ```powershell
-Get-ProdCsv -Command "vserver cifs symlinks show -vserver svm_nas_prod -fields vserver,unix-path,share-name,share-path"
+Get-<Prefix>Csv -Command "vserver cifs symlinks show -vserver <svm-name> -fields vserver,unix-path,share-name,share-path"
 ```
 
 ### Look up a specific widelink (PowerShell toolkit)
 ```powershell
-Get-NcCifsSymlink -UnixPath '/Mng/' -VserverContext svm_nas_prod
+Get-NcCifsSymlink -UnixPath '/Mng/' -VserverContext <svm-name>
 ```

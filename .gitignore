@@ -1,43 +1,31 @@
-# Python virtual environment
+# Python virtual environment (used for PDF extraction tools)
 .venv/
 
-# PDF files (large / proprietary)
-PDF/
-
-# VS Code workspace settings & MCP config
-.vscode/
-
-# Real cluster config (use config.template.json as starting point)
+# Local config with real cluster names, IPs, paths (template is tracked)
 config.json
 
 # Generated HTML (loads from config.json — not for git)
 *.html
 
-# Ansible Vault encrypted credential files
+# PDF files are large — track separately or exclude from git
+PDF/*.pdf
+
+# MCP config contains sensitive credentials (Telegram session string, API keys)
+.vscode/mcp.json
+
+# Ansible Vault encrypted credential files (keep vault_template.yml tracked)
 ansible/s3-bucket-provision/credentials/vault_credentials*.yml
 
-# Credentials folder (AES keys, encrypted passwords)
-credentials/
+# Credential store — only scripts are tracked, not keys or encrypted files
+credentials/aes.key
+credentials/*.cred
 
-# Internal NetApp support case summaries (proprietary)
-.github/Netapp Cases/
+# IDE settings
+.vscode/
 
-# Profile with environment-specific module paths
-profile1.ps1
-
-# Claude AI local settings / project config
+# Claude local settings
 .claude/
-CLAUDE.md
 
-# Internal prompts
-.github/prompts/
-
-# NDMP copy scripts (contain environment-specific config)
-scripts/ndmp-copy/
-
-# Output / diagnostic files
-*.json
-!config.template.json
-
-# Copilot instructions (internal-specific)
-.github/copilot-instructions.md
+# Site-specific DR reports (too coupled to local cluster topology)
+scripts/reports/Get-NI-DR-Report*.ps1
+Get-NI-DR-Report*.ps1

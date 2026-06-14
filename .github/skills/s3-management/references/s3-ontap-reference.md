@@ -110,7 +110,7 @@ vserver object-store-server bucket create -vserver <svm> -bucket <name> -size <s
 
 ### Modify / Resize
 ```
-vserver object-store-server bucket modify -vserver <svm> -bucket <name> -size <_size>
+vserver object-store-server bucket modify -vserver <svm> -bucket <name> -size <new_size>
 vserver object-store-server bucket modify -vserver <svm> -bucket <name> -qos-policy-group <qos_group>
 ```
 
@@ -149,7 +149,7 @@ vserver object-store-server group create -vserver <svm> -name <group> -users <us
 vserver object-store-server group show -vserver <svm>
 
 # Modify group
-vserver object-store-server group modify -vserver <svm> -name <group> -users <user1>,<user2> -policies <_policy>
+vserver object-store-server group modify -vserver <svm> -name <group> -users <user1>,<user2> -policies <new_policy>
 
 # Delete group
 vserver object-store-server group delete -vserver <svm> -name <group>

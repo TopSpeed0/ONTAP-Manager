@@ -2,7 +2,7 @@
 # =============================================================================
 # Ansible Playbook: Provision S3 Bucket — SVM Dev User
 # =============================================================================
-# Connects to svm-s3-data SVM management LIF with svm_s3_dev (vsadmin) credentials.
+# Connects to <s3-svm> SVM management LIF with svm_s3_dev (vsadmin) credentials.
 # This is what the DevOps team uses in their pipeline.
 #
 # IMPORTANT: The SVM MGMT LIF must use 'default-management' service policy.
@@ -25,7 +25,7 @@
 #   ansible-galaxy collection install netapp.ontap
 # =============================================================================
 
-- name: Provision S3 Bucket on svm-s3-data (SVM dev user)
+- name: Provision S3 Bucket on <s3-svm> (SVM dev user)
   hosts: localhost
   gather_facts: false
   connection: local
@@ -35,14 +35,14 @@
 
   vars:
     # --- Connection (SVM management LIF) ---
-    # lif_svm-s3-data_MGMT (10.x.x.5) — service-policy: default-management
-    # The S3 data LIF (10.x.x.14 / s3-data-svm) serves S3 only, NOT REST API.
-    ontap_hostname: "10.x.x.5"
+    # lif_<s3-svm>_MGMT (<svm-mgmt-ip>) — service-policy: default-management
+    # The S3 data LIF (<s3-data-lif-ip> / <s3-svm>) serves S3 only, NOT REST API.
+    ontap_hostname: "<svm-mgmt-ip>"
     ontap_username: "svm_s3_dev"
     ontap_validate_certs: false
 
     # --- SVM / S3 config ---
-    ontap_vserver: "svm-s3-data"
+    ontap_vserver: "<s3-svm>"
 
     # --- Bucket defaults ---
     bucket_name: ""
@@ -53,7 +53,7 @@
     s3_user: "sm_s3_dev"
 
   vars_files:
-    - credentials/vault_credentials_s3-cluster_sm_s3_dev.yml
+    - credentials/vault_credentials_<cluster-name>_sm_s3_dev.yml
 
   module_defaults:
     group/netapp.ontap.netapp_ontap:
@@ -112,7 +112,7 @@
         msg: |
           Bucket '{{ bucket_name }}' provisioned successfully on {{ ontap_vserver }}
           Size: {{ (bucket_size | int / 1073741824) | round(1) }} GB
-          S3 Endpoint: https://s3-data-svm.example.local/{{ bucket_name }}
+          S3 Endpoint: https://<s3-data-lif-fqdn>/{{ bucket_name }}
           S3 User: {{ s3_user }}
       when: bucket_result is changed
 
