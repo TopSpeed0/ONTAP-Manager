@@ -28,4 +28,13 @@ credentials/*.cred
 
 # Site-specific DR reports (too coupled to local cluster topology)
 scripts/reports/Get-NI-DR-Report*.ps1
+
+# Personal NetApp support cases (raw, contain customer name + internal links)
+.github/Netapp Cases/
+
+# Generated CSV reports (contain real cluster/volume data)
+*.csv
+
+# Old quota report (superseded by Clusters Quota Policy Manger.ps1)
+scripts/quota/Clusters Quota Reports (old).ps1
 Get-NI-DR-Report*.ps1

@@ -7,16 +7,8 @@
 # === Modules ===
 Import-Module NetApp.ONTAP -ErrorAction SilentlyContinue
 
-# Optional personal modules — edit these paths if you have them locally
-$_personalModules = @(
-    # "$env:USERPROFILE\path\to\Get-DFSNameSpaceRoot.psm1",
-    # "$env:USERPROFILE\path\to\Get-NcVolAvil.psm1"
-)
-foreach ($_mod in $_personalModules) {
-    if (Test-Path $_mod) { Import-Module $_mod -ErrorAction SilentlyContinue }
-}
-
 # === Load config and auto-generate cluster functions ===
+# Also loads Personal_modules from config.json (if defined)
 # Creates per-cluster: connect func, SSH func (-s), CSV wrapper (Get-<Prefix>Csv), aliases
 $rootDir = $PSScriptRoot
 . "$PSScriptRoot\Load-Config.ps1"

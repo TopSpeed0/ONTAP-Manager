@@ -32,6 +32,15 @@ if ($global:Config._comment -and $global:Config._comment -match 'Copy this file 
     throw "Load-Config.ps1: config.json still contains the template placeher. Edit it with your real cluster details before running."
 }
 
+# --- Personal modules (optional, from config.json) -------------------------
+if ($global:Config.Personal_modules) {
+    foreach ($_mod in $global:Config.Personal_modules) {
+        if (Test-Path $_mod) {
+            Import-Module $_mod -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
 # --- ONTAP clusters ---------------------------------------------------------
 $global:ONTAP_Clusters = @()
 foreach ($c in $global:Config.ONTAP_Clusters) {

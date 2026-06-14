@@ -14,25 +14,43 @@ git clone <repo-url> && cd Netapp-Code-WorkSpace
 . .\Load-Config.ps1
 
 # 3. You're ready — every cluster now has auto-generated functions:
-Prod-s -Command "vol show"           # SSH one-liner
-Get-A1kCsv -Command "vol show -fields vserver,volume,size,used"  # CSV → objects
-Prod                                  # Connect-NcController session (ZAPI)
+<ConnectName>-s -Command "vol show"           # SSH one-liner
+Get-<CsvPrefix>Csv -Command "vol show -fields vserver,volume,size,used"  # CSV → objects
+<ConnectName>                                  # Connect-NcController session (ZAPI)
 ```
 
 > **What happens on `. .\Load-Config.ps1`?**
 > 1. If `config.json` doesn't exist, copies `config.template.json` → `config.json` and stops
 > 2. Reads `config.json`, builds `$global:ONTAP_Clusters` array
-> 3. Auto-generates per-cluster functions: `<alias>`, `<alias>-s`, `Get-<CsvPrefix>Csv`
-> 4. Sets up ONTAP credentials (Jenkins env vars or interactive fallback)
-> 5. Browse the rich docs UI: `python -m http.server 8080` → open `http://localhost:8080/docs/`
+> 3. Auto-generates per-cluster functions: `<ConnectName>`, `<ConnectName>-s`, `Get-<CsvPrefix>Csv`, aliases
+> 4. Loads personal modules from `Personal_modules` in config.json
+> 5. Sets up ONTAP credentials (Jenkins env vars or interactive fallback)
+> 6. One-liner to launch everything: `.\Start-Docs.ps1` — checks Python, starts docs hub, loads config
+
+### One-Liner Launch
+
+```powershell
+.\Start-Docs.ps1
+```
+
+This single script:
+- Checks if Python is installed (auto-installs via `winget` if missing)
+- Starts an HTTP server on the port from `config.json` (`Docs_Port`, default `8080`)
+- Opens the docs hub in your browser
+- Dot-sources `Load-Config.ps1` so all cluster functions are ready in your session
 
 Copy `config.template.json` → `config.json` and fill in your cluster details. `Load-Config.ps1` auto-generates per-cluster functions:
 
+## Clusters
+
+<!-- Dynamically replaced by the docs hub with a rich table from config.json -->
+
 | Function Pattern | Purpose |
 |-----------------|---------|
-| `<alias>` | `connect-ncController` session (ZAPI) |
-| `<alias>-s [-Command "..."]` | SSH shortcut (interactive or one-shot) |
+| `<ConnectName>` | `Connect-NcController` session (ZAPI) |
+| `<ConnectName>-s [-Command "..."]` | SSH shortcut (interactive or one-shot) |
 | `Get-<CsvPrefix>Csv -Command "..."` | SSH + CSV parse → PowerShell objects |
+| `<Alias>` / `<Alias>-s` | Short aliases (when Alias ≠ ConnectName) |
 
 ## Key PowerShell Helpers
 
@@ -41,9 +59,9 @@ Copy `config.template.json` → `config.json` and fill in your cluster details. 
 - **`connect-ncController` aliases** — DataONTAP PowerShell Toolkit (ZAPI) sessions.
 
 ```powershell
-# Examples (replace with your aliases from config.json)
-Get-ProdCsv -Command "vol show -fields vserver,volume,size,used"
-prod-s -Command "snapmirror show"
+# Examples (replace <ConnectName> and <CsvPrefix> with your values from config.json)
+Get-<CsvPrefix>Csv -Command "vol show -fields vserver,volume,size,used"
+<ConnectName>-s -Command "snapmirror show"
 ```
 
 ## Repository Layout
@@ -52,8 +70,10 @@ prod-s -Command "snapmirror show"
 config.json                  # Cluster definitions (gitignored — real data)
 config.template.json         # Template for  users (tracked)
 Load-Config.ps1              # Central config loader — auto-generates functions
+Start-Docs.ps1               # One-liner: Python check + docs server + config load
 profile1.ps1                 # Workspace profile — modules + dot-sources Load-Config
 .github/
+  agents/                    # Custom Copilot agents (@sanitizer, etc.)
   copilot-instructions.md    # Agent instructions & conventions
   Netapp Cases/              # Curated NetApp support case summaries (KB)
   skills/                    # Domain skills loaded by the agent
@@ -86,9 +106,101 @@ Each fer under [.github/skills/](.github/skills/) contains a `SKILL.md` with sco
 - [svm-management](.github/skills/svm-management/) — SVM creation, NAS/SAN protocol config
 - [volume-management](.github/skills/volume-management/) — Volume create/resize/move/clone
 
+## Agents
+
+Custom agents live in [.github/agents/](.github/agents/) and appear in the VS Code chat agent picker (`@`):
+
+| Agent | Description | Example |
+|-------|-------------|---------|
+| `@sanitizer` | Scrub sensitive data from files for the public repo | `@sanitizer clean scripts/quota/Clusters Quota Policy Manger.ps1` |
+| `@documenter` | Audit & enhance docs for a script across README, copilot-instructions, and skills | `@documenter scripts/disk/sas-diag.ps1` |
+| `@case-sanitizer` | Convert personal NetApp cases to generic KnownIssues articles | `@case-sanitizer all` |
+
+`@sanitizer` scans a file for hardcoded cluster names, IPs, FQDNs, personal paths, and credentials (cross-referencing `config.json`), replaces them with generic `<placeholder>` patterns, then updates README, copilot-instructions, and skill files if they reference the changed content. Finishes with a verification grep.
+
+## Scripts
+
+### DR Report (`scripts/reports/Get-DR-Report.ps1`)
+
+SnapMirror DR coverage report — groups clusters by `SnapmirrorGroup` from `config.json`.
+
+```powershell
+# All groups
+.\scripts\reports\Get-DR-Report.ps1
+
+# Corp group only
+.\scripts\reports\Get-DR-Report.ps1 -SMirrorG Corp
+
+# NI group only
+.\scripts\reports\Get-DR-Report.ps1 -SnapmirrorGroup NI
+```
+
+Outputs a CSV with per-volume DR status, outbound/inbound mirrors, health, lag, and a per-group summary.
+
+### Quota Manager (`scripts/quota/Clusters Quota Policy Manger.ps1`)
+
+Interactive qtree quota viewer and resizer. Auto-connects to the first `MainCluster` from config if no cluster session is active.
+
+```powershell
+.\scripts\quota\Clusters Quota Policy Manger.ps1
+```
+
+### NDMP Copy (`scripts/ndmp-copy/Ndmp_Copy.ps1`)
+
+Config-driven cross-cluster file copy via NDMP. All parameters default from `NDMP_Config` in `config.json`.
+
+```powershell
+# Zero-config — uses SrcCluster, DstCluster, SRC, DST from config.json:
+.\scripts\ndmp-copy\Ndmp_Copy.ps1
+
+# Override with explicit params:
+.\scripts\ndmp-copy\Ndmp_Copy.ps1 -SrcCluster SrcAlias -DstCluster DstAlias -SourcePath "/src_svm/src_vol/path" -DestPath "/dst_svm/dst_vol/path"
+```
+
+### Biggest Snapshots (`scripts/snapshots/Get-BiggestSnapshot.ps1`)
+
+Queries all clusters via SSH and reports the top 20 largest snapshots.
+
+```powershell
+.\scripts\snapshots\Get-BiggestSnapshot.ps1
+```
+
+### SAS Diagnostics (`scripts/disk/sas-diag.ps1`)
+
+Comprehensive SAS / disk / shelf connectivity diagnostics for any ONTAP cluster. Runs 11 checks via SSH and resolves the cluster from `config.json`. Verifies SSH connectivity before running.
+
+Exported function: **`Get-SasDiag`**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `-Cluster` | string | Yes (positional) | Cluster name or alias from `config.json` |
+| `-Shelf` | int | No | Limit disk-path detail (step 9) to a specific shelf |
+| `-Export` | switch | No | Export flat results to `<Cluster>_SAS_diag.csv` |
+| `-Json` | switch | No | Export structured/parsed results to `<Cluster>_SAS_diag.json` (preferred) |
+
+```powershell
+# Dot-source to load the function
+. .\scripts\disk\sas-diag.ps1
+
+# Console output only
+Get-SasDiag <ClusterName>
+
+# Filter to a specific shelf
+Get-SasDiag <ClusterName> -Shelf 2
+
+# Structured JSON export (preferred — parses -fields commands into objects)
+Get-SasDiag <ClusterName> -Json
+
+# Flat CSV export
+Get-SasDiag <ClusterName> -Export
+```
+
+See [ontap-cluster-info skill](.github/skills/ontap-cluster-info/SKILL.md) for the full list of 11 diagnostic checks.
+
 ## Knowledge Base
 
-- **[.github/Netapp Cases/](.github/Netapp%20Cases/)** — One Markdown file per NetApp support case. The agent searches this first when diagnosing errors or alerts.
+- **[KnownIssues/](KnownIssues/)** — Generic, sanitized ONTAP known-issue articles (tracked in git). Generated from personal case files by `@case-sanitizer`.
+- **`.github/Netapp Cases/`** — Raw NetApp support case summaries (gitignored — personal data). The agent searches this first when diagnosing errors or alerts.
 - **[PDF/](PDF/)** — NetApp documentation PDFs, imported into skill references via the `pdf-knowledge-import` skill.
 
 ## Conventions

@@ -1,6 +1,18 @@
 {
   "_comment": "Copy this file to config.json and fill in your values. config.json is gitignored.",
-
+  "Docs_Port": 8080,
+  "NDMP_Config": {
+    "BackupUser": "backupuser",
+    "CredentialPrefix": "ndmp",
+    "SrcCluster": "",
+    "DstCluster": "",
+    "SRC": "",
+    "DST": ""
+  },
+  "Personal_modules": [
+    "c:\\users\\<username>\\OneDrive\\modules1.psm1",
+    "c:\\users\\<username>\\OneDrive\\modules2.psm1"
+    ],
   "ONTAP_Credential": {
     "JenkinsCredentialId": "",
     "EnvVarUser": "NETAPP_USER",
@@ -15,7 +27,10 @@
       "CsvPrefix": "",
       "Description": "",
       "FallbackIP": "",
-      "VIP": false
+      "VIP": false,
+      "NdmpPassword": "",
+      "SnapmirrorGroup": "",
+      "MainCluster": false
     }
   ]
 }

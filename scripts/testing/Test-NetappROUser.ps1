@@ -1,8 +1,9 @@
-# Test Netapp_RO_jack credentials on all clusters
+# Test ONTAP read-only credentials on all clusters
 $rootDir = (Resolve-Path "$PSScriptRoot\..\..").Path
 . "$rootDir\Load-Config.ps1"
 
-$cred = Get-Credential -UserName "Netapp_RO_jack" -Message "Enter Netapp_RO_jack password"
+$roUser = $config.ONTAP_Credential.JenkinsCredentialId
+$cred = Get-Credential -UserName $roUser -Message "Enter $roUser password"
 
 $results = foreach ($cl in $ONTAP_Clusters) {
     $addr = if ($cl.FallbackIP) { $cl.FallbackIP } else { $cl.ConnectName }

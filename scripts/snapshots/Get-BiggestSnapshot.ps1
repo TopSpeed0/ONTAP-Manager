@@ -95,6 +95,6 @@ foreach ($s in $top20) {
 $report | Format-Table -AutoSize
 
 # Save to CSV for reference
-$csvPath = "C:\Users\Operator\OneDrive\Documents\code\Netapp-Code-WorkSpace\biggest-snapshots.csv"
+$csvPath = Join-Path $rootDir "biggest-snapshots.csv"
 $report | Export-Csv -Path $csvPath -NoTypeInformation
 Write-Host "`nResults saved to: $csvPath" -ForegroundColor Green

@@ -8,27 +8,40 @@
     - If we get HTTP 404 → endpoint doesn't exist, SSH is the only option.
 
 .EXAMPLE
-    .\Test-VserverConfigOverrideAPI.ps1 -ClusterName <cluster-name>
-    .\Test-VserverConfigOverrideAPI.ps1 -ClusterName <cluster-name> -Credential (Get-Credential)
+    .\Test-VserverConfigOverrideAPI.ps1
+    # Uses first VIP cluster and prompts for vserver + credentials
+
+.EXAMPLE
+    .\Test-VserverConfigOverrideAPI.ps1 -ClusterName <cluster-name> -Vserver <svm-name> -Credential (Get-Credential)
 #>
 [CmdletBinding()]
 param(
-    [Parameter(Mandatory=$true)]
     [string]$ClusterName,
-    [string]$Vserver = "svm_nas_K8s",
+    [string]$Vserver,
     [PSCredential]$Credential
 )
 
 $rootDir = (Resolve-Path "$PSScriptRoot\..\..").Path
 . "$rootDir\Load-Config.ps1"
 
-# Resolve cluster from config
-$clEntry = $ONTAP_Clusters | Where-Object { $_.ClusterName -eq $ClusterName -or $_.ConnectName -eq $ClusterName }
+# Default to first VIP cluster if not specified
+if ([string]::IsNullOrWhiteSpace($ClusterName)) {
+    $clEntry = $ONTAP_Clusters | Where-Object { $_.VIP -eq $true } | Select-Object -First 1
+    if (-not $clEntry) { throw "No VIP cluster found in config.json" }
+    Write-Host "Using VIP cluster: $($clEntry.Alias)" -ForegroundColor Cyan
+} else {
+    $clEntry = $ONTAP_Clusters | Where-Object { $_.ClusterName -eq $ClusterName -or $_.ConnectName -eq $ClusterName -or $_.Alias -eq $ClusterName }
+}
 if (-not $clEntry) {
     $available = ($ONTAP_Clusters | ForEach-Object { $_.ClusterName }) -join ', '
     throw "Unknown cluster '$ClusterName'. Available: $available"
 }
 $Cluster = if ($clEntry.FallbackIP) { $clEntry.FallbackIP } else { $clEntry.ConnectName }
+
+# Default Vserver — prompt if not provided
+if ([string]::IsNullOrWhiteSpace($Vserver)) {
+    $Vserver = Read-Host "Enter Vserver name to test on $($clEntry.Alias)"
+}
 
 # --- Get credentials ---
 if (-not $Credential) {

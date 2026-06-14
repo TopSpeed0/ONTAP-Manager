@@ -97,11 +97,11 @@ Get-<Prefix>Csv -Command "lun show -fields vserver,path,size,mapped,serial-numbe
 ## SAS / Disk / Shelf Diagnostics
 
 Use `Get-SasDiag` for comprehensive SAS connectivity diagnostics on any cluster.
-Script location: `sas-diag.ps1` in the workspace root.
+Script location: `scripts/disk/sas-diag.ps1`.
 
 ```powershell
-# Dot-source to load the function (self-contained, no profile1.ps1 needed)
-. .\sas-diag.ps1
+# Dot-source to load the function (self-contained — loads Load-Config.ps1 internally)
+. .\scripts\disk\sas-diag.ps1
 
 # Run on any cluster by alias (console output only)
 Get-SasDiag <alias>
@@ -131,7 +131,7 @@ Get-SasDiag <alias> -Export        # → <alias>_SAS_diag.csv
 11. Shelf port detail
 
 ### Supported clusters
-`a1k`, `nadr`, `nidr`, `<cluster-name>`, `<cluster-name>`, `<cluster-name>`, `<cluster-name>`
+Any cluster defined in `config.json`. The function resolves by `ClusterName` or `ConnectName` and uses `FallbackIP` if set.
 
 The function verifies SSH connectivity before running. No ZAPI / profile dependency.
 

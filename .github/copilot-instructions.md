@@ -10,14 +10,14 @@ All cluster definitions live in `config.json` (gitignored) — never hardcode cl
 Clusters are loaded dynamically from `config.json` by `Load-Config.ps1`.
 Each cluster entry has: `ClusterName`, `ConnectName`, `Alias`, `CsvPrefix`, `Description`, `FallbackIP`, `VIP`.
 
-After `. .\Load-Config.ps1`, the following are available per cluster:
+After `. .\Load-Config.ps1`, the following are auto-generated **per cluster** from `config.json`:
 
-| Generated Item | Pattern | Example (Alias=Prod, CsvPrefix=A1k) |
+| Generated Item | Pattern | Description |
 |---|---|---|
-| Connect function | `Connect-<Alias>` | `Connect-Prod` |
-| SSH function | `<ConnectName>-s` | `Prod-prd-s` |
-| CSV helper | `Get-<CsvPrefix>Csv` | `Get-A1kCsv` |
-| SSH alias | `<Alias>` lowercased | `prod-s` |
+| Connect function | `<ConnectName>` | Calls `Connect-NcController` |
+| SSH function | `<ConnectName>-s` | `ssh admin@<host>` (uses FallbackIP if set) |
+| CSV helper | `Get-<CsvPrefix>Csv` | Wraps `Invoke-OntapCsv` for structured output |
+| Alias (if different) | `<Alias>` → connect, `<Alias>-s` → SSH | Short names when Alias ≠ ConnectName |
 
 Use `$global:ONTAP_Clusters` to iterate all clusters, or `Get-OntapTargetClusters` with `-VIP` or `-Cluster` parameters.
 
@@ -62,6 +62,15 @@ snapmirror show -fields source-path,destination-path,state,status
 vserver show -fields vserver,type,state,allowed-protocols
 aggr show -fields aggregate,size,usedsize,availsize,node
 lun show -fields vserver,path,size,mapped
+storage disk show -fields disk,owner,container-type,shelf,bay
+storage port show
+storage shelf show -fields shelf-id,state,module-type,vendor,module-fw-rev
+storage errors show
+storage shelf port show
+event log show -severity ERROR -message-name *sas* -fields time,node,message-name,event
+system health alert show
+system health status show
+system health subsystem show
 iscsi session show -vserver <svm> -fields tpgroup,tsih,initiator-name,initiator-alias,isid
 vserver iscsi connection show -vserver <svm> -fields tpgroup,tsih,remote-address,local-address,remote-ip-port
 iscsi initiator show -vserver <svm>
@@ -101,9 +110,14 @@ Cluster → Nodes (HA Pairs) → Aggregates → Volumes → LUNs/Files. SVMs spa
 
 ## NetApp Support Cases Knowledge Base
 
-The folder `.github/Netapp Cases/` is a curated knowledge base of NetApp support case summaries — one Markdown file per case, named like `NetApp Case Summary – <case#> (<short tag>).md`. The user adds to this folder over time.
+Two folders hold case-based knowledge:
 
-**When the user asks about an ONTAP error, alert, or symptom, search this folder first** for an existing case summary that matches before researching from scratch. Treat the contents as authoritative context for the issues they describe (root cause, workarounds, NetApp engineer guidance).
+- **`KnownIssues/`** (tracked) — Sanitized, generic articles. Search here first.
+- **`.github/Netapp Cases/`** (gitignored) — Raw personal case summaries with customer-specific data. Search here when `KnownIssues/` has no match.
+
+Use `@case-sanitizer` to convert raw cases into generic KnownIssues articles.
+
+**When the user asks about an ONTAP error, alert, or symptom, search both folders** for an existing case summary that matches before researching from scratch. Treat the contents as authoritative context for the issues they describe (root cause, workarounds, NetApp engineer guidance).
 
 ## PDF Documentation Library
 

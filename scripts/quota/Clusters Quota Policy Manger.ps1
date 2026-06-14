@@ -1,5 +1,30 @@
 # this script will help you to manage quota on netapp cluster
 # it will connect to the cluster and get all quota report, and filter the quota that are above a certain percentage, and then allow the user to resize the quota
+
+# Load config
+$rootDir = (Resolve-Path "$PSScriptRoot\..\..").Path
+. "$rootDir\Load-Config.ps1"
+
+# Auto-connect: if no cluster is already connected, connect to the first MainCluster from config
+$currentController = $null
+try { $currentController = Get-NcController -ErrorAction SilentlyContinue } catch {}
+if (-not $currentController) {
+    $mainCluster = $ONTAP_Clusters | Where-Object { $_.MainCluster -eq $true } | Select-Object -First 1
+    if (-not $mainCluster) { $mainCluster = $ONTAP_Clusters | Select-Object -First 1 }
+    $addr = if ($mainCluster.FallbackIP) { $mainCluster.FallbackIP } else { $mainCluster.ConnectName }
+    Write-Host "No cluster connected. Connecting to $($mainCluster.Alias) ($addr)..." -ForegroundColor Cyan
+    try {
+        Connect-NcController $addr -ErrorAction Stop | Out-Null
+        Write-Host "Connected to $($mainCluster.Alias)" -ForegroundColor Green
+    } catch {
+        Write-Host "Failed to connect to $($mainCluster.Alias): $_" -ForegroundColor Red
+        Write-Host "Please connect manually and re-run." -ForegroundColor Yellow
+        return
+    }
+} else {
+    Write-Host "Already connected to $($currentController.Name)" -ForegroundColor Green
+}
+
 do {
     try { $percentage = [int](Read-host "What level of Percentage quota you wish to see (must be between 10 and 99)") } catch {}
 } while ($percentage -le 10 -or $percentage -ge 100)
@@ -46,7 +71,6 @@ catch {
     Write-Error  "exiting script becuse we could not load DataONTAP error: $ErrorMessage"
     Pause
 }
-# Create a function to display sizes (input in bytes - NetApp.ONTAP toolkit returns bytes)
 $Target = Read-host "Provide an Qtree name to Resize"
 function DisplayInKB($num) {
     $suffix = "B", "KB", "MB", "GB", "TB", "PB", "EB", "ZB", "YB"
@@ -57,63 +81,6 @@ function DisplayInKB($num) {
     } 
 
     "{0:N2} {1}" -f $num, $suffix[$index]
-}
-# Set Netapp Cluster name
-$NCCluster = 'cluster-prod'
-# set SVM to work with\
-$SVM_NAS = 'svm_nas_prod'
-$user = $null
-
-# start timeout for connection
-$startTime = Get-Date
-
-# Check if we have credentials stored for the Cluster if not ask for them
-while ($null -eq $CurrentNcController.name -or $startTime.AddMinutes(5) -lt (Get-Date)) {
-    $user = $null
-    if ( $null -eq (Get-NcCredential -Name $NCCluster) ) {
-        while (($user -notmatch "MyOrg\\") -or ($null -eq $user) -or ($user -ne "root")) {
-            $user = read-host "Please use your A_Account must be Member of IT_InfraOps_A | A_Account"
-            if ($user -eq "root") {
-                Add-NcCredential -Name $NCCluster -Credential (Get-Credential $user ) 
-            }
-            else {
-                if (Get-Module activeDirectory -ListAvailable) {
-                    try {
-                        Import-Module activeDirectory
-                        if ($user -match "MyOrg\\") {
-                            $user = $user.Split('\')[1]
-                        }
-                        get-aduser $user -ErrorAction stop | Out-Null
-                        $user = "MyOrg\" + $user
-                    }
-                    catch {
-                        Write-Host "User $user not found in AD please try again provide user name in 'MyOrg\\username' format or just username" -ForegroundColor Red
-                        $user = $null
-                    }
-                }
-                else {
-                    $user = "MyOrg\" + $user
-                }
-                # Store the Credentials for the Cluster
-                Add-NcCredential -Name $NCCluster -Credential (Get-Credential $user ) 
-            }
-        }
-    }
-    try {
-        Connect-NcController -Name $NCCluster -ErrorAction Stop | Out-Null
-    }
-    catch {
-        $ErrorMessage = $_.Exception.Message
-        Write-Error  "Please provide correct credentials for $NCCluster"
-        Get-NcCredential -Name $NCCluster | Remove-NcCredential -ErrorAction SilentlyContinue
-        Pause
-    }
-}
-if ($startTime.AddMinutes(5) -lt (Get-Date) ) {
-    Write-Error "Could not connect to $NCCluster after 5 minutes, exiting script"
-    break
-    exit
-    throw 1
 }
 #exit # here for testing for now
 $GetNcQuotaReport = Get-NcQuotaReport 
