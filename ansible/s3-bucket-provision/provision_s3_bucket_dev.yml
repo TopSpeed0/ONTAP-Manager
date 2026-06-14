@@ -1,0 +1,122 @@
+---
+# =============================================================================
+# Ansible Playbook: Provision S3 Bucket — SVM Dev User
+# =============================================================================
+# Connects to svm-s3-data SVM management LIF with svm_s3_dev (vsadmin) credentials.
+# This is what the DevOps team uses in their pipeline.
+#
+# IMPORTANT: The SVM MGMT LIF must use 'default-management' service policy.
+#       If data-s3-server is in the policy, S3 hijacks port 443 and REST API
+#       returns XML instead of JSON → "400 Bad Request" errors.
+#
+# Usage:
+#   ansible-playbook provision_s3_bucket_dev.yml --vault-password-file ~/.vault_pass -e "bucket_name=my-bucket"
+#   ansible-playbook provision_s3_bucket_dev.yml --ask-vault-pass -e "bucket_name=my-bucket"
+#
+# Required extra vars:
+#   bucket_name  - Name of the S3 bucket to create
+#
+# Optional extra vars:
+#   bucket_size    - Size in bytes (default: 107374182400 = 100GB, minimum 95GB)
+#   bucket_comment - Comment for the bucket
+#   s3_user        - S3 user to grant access (default: sm_s3_dev)
+#
+# Prerequisites:
+#   ansible-galaxy collection install netapp.ontap
+# =============================================================================
+
+- name: Provision S3 Bucket on svm-s3-data (SVM dev user)
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  collections:
+    - netapp.ontap
+
+  vars:
+    # --- Connection (SVM management LIF) ---
+    # lif_svm-s3-data_MGMT (10.x.x.5) — service-policy: default-management
+    # The S3 data LIF (10.x.x.14 / s3-data-svm) serves S3 only, NOT REST API.
+    ontap_hostname: "10.x.x.5"
+    ontap_username: "svm_s3_dev"
+    ontap_validate_certs: false
+
+    # --- SVM / S3 config ---
+    ontap_vserver: "svm-s3-data"
+
+    # --- Bucket defaults ---
+    bucket_name: ""
+    bucket_size: 107374182400  # 100GB in bytes
+    bucket_comment: "Provisioned by Ansible DevOps automation"
+
+    # --- S3 user to grant bucket access ---
+    s3_user: "sm_s3_dev"
+
+  vars_files:
+    - credentials/vault_credentials_s3-cluster_sm_s3_dev.yml
+
+  module_defaults:
+    group/netapp.ontap.netapp_ontap:
+      hostname: "{{ ontap_hostname }}"
+      username: "{{ ontap_username }}"
+      password: "{{ ontap_password }}"
+      https: true
+      validate_certs: "{{ ontap_validate_certs }}"
+      use_rest: always
+
+  pre_tasks:
+    - name: Validate bucket_name is provided
+      ansible.builtin.assert:
+        that:
+          - bucket_name | length > 0
+        fail_msg: "bucket_name is required. Use: -e 'bucket_name=my-bucket'"
+        success_msg: "Provisioning bucket: {{ bucket_name }}"
+
+    - name: Validate bucket_size minimum (95GB = 101811601818 bytes approx)
+      ansible.builtin.assert:
+        that:
+          - bucket_size | int >= 95000000000
+        fail_msg: "bucket_size must be at least 95GB (~95000000000 bytes). Got: {{ bucket_size }}"
+        success_msg: "Bucket size: {{ (bucket_size | int / 1073741824) | round(1) }} GB"
+
+  tasks:
+    - name: Create S3 bucket '{{ bucket_name }}' on {{ ontap_vserver }}
+      netapp.ontap.na_ontap_s3_buckets:
+        state: present
+        name: "{{ bucket_name }}"
+        vserver: "{{ ontap_vserver }}"
+        size: "{{ bucket_size | int }}"
+        comment: "{{ bucket_comment }}"
+        policy:
+          statements:
+            - sid: "DevOpsFullAccess"
+              effect: allow
+              principals:
+                - "{{ s3_user }}"
+              actions:
+                - GetObject
+                - PutObject
+                - DeleteObject
+                - ListBucket
+                - GetBucketAcl
+                - GetObjectAcl
+                - ListBucketMultipartUploads
+                - ListMultipartUploadParts
+              resources:
+                - "{{ bucket_name }}"
+                - "{{ bucket_name }}/*"
+      register: bucket_result
+
+    - name: Display bucket creation result
+      ansible.builtin.debug:
+        msg: |
+          Bucket '{{ bucket_name }}' provisioned successfully on {{ ontap_vserver }}
+          Size: {{ (bucket_size | int / 1073741824) | round(1) }} GB
+          S3 Endpoint: https://s3-data-svm.example.local/{{ bucket_name }}
+          S3 User: {{ s3_user }}
+      when: bucket_result is changed
+
+    - name: Bucket already exists (no changes)
+      ansible.builtin.debug:
+        msg: "Bucket '{{ bucket_name }}' already exists on {{ ontap_vserver }} - no changes made."
+      when: bucket_result is not changed

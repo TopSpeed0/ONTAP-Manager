@@ -1,0 +1,150 @@
+---
+# =============================================================================
+# Ansible Playbook: Provision S3 Bucket — Generic (any cluster/SVM)
+# =============================================================================
+# Fully parameterized playbook for creating S3 buckets on any ONTAP cluster.
+#
+# Usage:
+#   # With vault file:
+#   ansible-playbook provision_s3_bucket_generic.yml \
+#     -e @vault_file.yml --vault-password-file ~/.vault_pass \
+#     -e "ontap_hostname=s3-cluster ontap_vserver=svm-s3-data bucket_name=my-bucket s3_user=sm_s3_dev"
+#
+#   # With direct password:
+#   ansible-playbook provision_s3_bucket_generic.yml \
+#     -e "ontap_hostname=cluster-prod ontap_vserver=svm_s3_prod ontap_password=SECRET bucket_name=my-bucket s3_user=jfrog-s3"
+#
+#   # With custom size (human-readable):
+#   ansible-playbook provision_s3_bucket_generic.yml \
+#     -e "... bucket_size=200GB"
+#
+# Required extra vars:
+#   ontap_hostname - Cluster or SVM management LIF (e.g., cluster-prod, s3-cluster, 10.x.x.5)
+#   ontap_vserver  - SVM name (e.g., svm_s3_prod, svm-s3-data)
+#   ontap_password - ONTAP password (via -e, vault file, or environment)
+#   bucket_name    - Name of the S3 bucket to create
+#   s3_user        - S3 user to grant bucket access (e.g., jfrog-s3, sm_s3_dev)
+#
+# Optional extra vars:
+#   ontap_username      - ONTAP user (default: admin)
+#   bucket_size         - Bucket size, human-readable (default: 100GB, min ~95GB)
+#   bucket_comment      - Comment for the bucket
+#   ontap_validate_certs - Validate TLS certs (default: false)
+#
+# IMPORTANT — SVM LIF service policy:
+#   The target LIF must serve REST API (management-https without data-s3-server).
+#   If data-s3-server is in the same service policy, S3 hijacks port 443 and
+#   REST API calls return XML → "400 Bad Request". Use a separate MGMT LIF
+#   with 'default-management' policy, or the cluster management LIF.
+#
+# Prerequisites:
+#   ansible-galaxy collection install netapp.ontap
+# =============================================================================
+
+- name: "Provision S3 Bucket (generic)"
+  hosts: localhost
+  gather_facts: false
+  connection: local
+
+  collections:
+    - netapp.ontap
+
+  vars:
+    # --- Connection (all overridable via -e) ---
+    ontap_hostname: ""          # REQUIRED
+    ontap_username: "admin"     # default
+    ontap_password: ""          # REQUIRED — pass via -e or vault file
+    ontap_validate_certs: false
+    ontap_vserver: ""           # REQUIRED
+
+    # --- Bucket config ---
+    bucket_name: ""             # REQUIRED
+    bucket_size: "100GB"        # Human-readable (e.g., 100GB, 200GB, 1TB)
+    bucket_comment: "Provisioned by Ansible automation"
+
+    # --- S3 user to grant bucket access ---
+    s3_user: ""                 # REQUIRED
+
+  module_defaults:
+    group/netapp.ontap.netapp_ontap:
+      hostname: "{{ ontap_hostname }}"
+      username: "{{ ontap_username }}"
+      password: "{{ ontap_password }}"
+      https: true
+      validate_certs: "{{ ontap_validate_certs }}"
+      use_rest: always
+
+  pre_tasks:
+    - name: Validate required parameters
+      ansible.builtin.assert:
+        that:
+          - ontap_hostname | length > 0
+          - ontap_vserver | length > 0
+          - ontap_password | length > 0
+          - bucket_name | length > 0
+          - s3_user | length > 0
+        fail_msg: |
+          Missing required parameters. Usage:
+            -e "ontap_hostname=CLUSTER ontap_vserver=SVM ontap_password=PASS bucket_name=NAME s3_user=USER"
+          Or use a vault file:
+            -e @vault_file.yml --vault-password-file ~/.vault_pass
+        success_msg: >-
+          Target: {{ ontap_hostname }} / {{ ontap_vserver }} |
+          Bucket: {{ bucket_name }} ({{ bucket_size }}) |
+          User: {{ ontap_username }} |
+          S3 User: {{ s3_user }}
+
+    - name: Convert and validate bucket_size
+      ansible.builtin.set_fact:
+        bucket_size_bytes: "{{ bucket_size | human_to_bytes }}"
+
+    - name: Validate bucket_size minimum (~95GB)
+      ansible.builtin.assert:
+        that:
+          - bucket_size_bytes | int >= 95000000000
+        fail_msg: "bucket_size must be at least ~95GB. Got: {{ bucket_size }} ({{ bucket_size_bytes }} bytes)"
+        success_msg: "Bucket size: {{ bucket_size }} ({{ (bucket_size_bytes | int / 1073741824) | round(1) }} GiB)"
+
+  tasks:
+    # ==================================================================
+    # Create the S3 bucket with access policy
+    # ==================================================================
+    - name: "Create S3 bucket '{{ bucket_name }}' on {{ ontap_vserver }}"
+      netapp.ontap.na_ontap_s3_buckets:
+        state: present
+        name: "{{ bucket_name }}"
+        vserver: "{{ ontap_vserver }}"
+        size: "{{ bucket_size_bytes | int }}"
+        comment: "{{ bucket_comment }}"
+        policy:
+          statements:
+            - sid: "FullAccess"
+              effect: allow
+              principals:
+                - "{{ s3_user }}"
+              actions:
+                - GetObject
+                - PutObject
+                - DeleteObject
+                - ListBucket
+                - GetBucketAcl
+                - GetObjectAcl
+                - ListBucketMultipartUploads
+                - ListMultipartUploadParts
+              resources:
+                - "{{ bucket_name }}"
+                - "{{ bucket_name }}/*"
+      register: bucket_result
+
+    - name: Display bucket creation result
+      ansible.builtin.debug:
+        msg: |
+          Bucket '{{ bucket_name }}' provisioned on {{ ontap_vserver }} ({{ ontap_hostname }})
+          Size: {{ bucket_size }} ({{ (bucket_size_bytes | int / 1073741824) | round(1) }} GiB)
+          S3 User: {{ s3_user }}
+      when: bucket_result is changed
+
+    - name: Bucket already exists
+      ansible.builtin.debug:
+        msg: "Bucket '{{ bucket_name }}' already exists on {{ ontap_vserver }} — no changes."
+      when: bucket_result is not changed

@@ -1,0 +1,43 @@
+# Python virtual environment
+.venv/
+
+# PDF files (large / proprietary)
+PDF/
+
+# VS Code workspace settings & MCP config
+.vscode/
+
+# Real cluster config (use config.template.json as starting point)
+config.json
+
+# Generated HTML (loads from config.json — not for git)
+*.html
+
+# Ansible Vault encrypted credential files
+ansible/s3-bucket-provision/credentials/vault_credentials*.yml
+
+# Credentials folder (AES keys, encrypted passwords)
+credentials/
+
+# Internal NetApp support case summaries (proprietary)
+.github/Netapp Cases/
+
+# Profile with environment-specific module paths
+profile1.ps1
+
+# Claude AI local settings / project config
+.claude/
+CLAUDE.md
+
+# Internal prompts
+.github/prompts/
+
+# NDMP copy scripts (contain environment-specific config)
+scripts/ndmp-copy/
+
+# Output / diagnostic files
+*.json
+!config.template.json
+
+# Copilot instructions (internal-specific)
+.github/copilot-instructions.md

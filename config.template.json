@@ -1,0 +1,20 @@
+{
+  "_comment": "Copy this file to config.json and fill in your values. config.json is gitignored.",
+
+  "ONTAP_Credential": {
+    "JenkinsCredentialId": "",
+    "EnvVarUser": "NETAPP_USER",
+    "EnvVarPass": "NETAPP_PASS"
+  },
+
+  "ONTAP_Clusters": [
+    {
+      "ClusterName": "",
+      "ConnectName": "",
+      "Alias": "",
+      "CsvPrefix": "",
+      "Description": "",
+      "FallbackIP": ""
+    }
+  ]
+}
