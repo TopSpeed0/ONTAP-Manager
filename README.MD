@@ -285,6 +285,67 @@ $sec = & .\credentials\Get-Credential.ps1 -Name "ontap_s3" -AsSecureString
 
 Ansible CLI doesn't run natively on Windows. Use **WSL** (`wsl -d Ubuntu-22.04`, Ansible at `~/.local/bin/`).
 
+### First-Time Setup
+
+A setup script automates WSL prerequisites. Manual steps are listed below for reference.
+
+**Automated (recommended):**
+
+```powershell
+# 1. Store your ONTAP credentials (one-time, interactive prompts)
+.\credentials\New-Credential.ps1 -Name "ontap_s3"     # ONTAP password for S3 cluster
+.\credentials\New-Credential.ps1 -Name "vault_key"    # Ansible vault master password
+
+# 2. Install Ansible in WSL + create encrypted vault file
+.\ansible\s3-bucket-provision\Setup-AnsibleWSL.ps1 -SetupVault -Cluster <cluster-alias>
+
+# 3. Test (dry-run — shows command without executing)
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 -Cluster <cluster-alias> -BucketName test -DryRun
+```
+
+`Setup-AnsibleWSL.ps1` does the following automatically:
+1. Installs `ansible` and `netapp-lib` via pip in WSL
+2. Installs the `netapp.ontap` Ansible Galaxy collection
+3. Creates a vault credentials YAML from the credential store and encrypts it with `ansible-vault`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `-SetupVault` | No | — | Also create + encrypt vault file for a cluster |
+| `-Cluster` | With `-SetupVault` | — | Cluster alias from `config.json` |
+| `-SkipInstall` | No | — | Skip pip/collection install (vault only) |
+| `-WslDistro` | No | `Ubuntu-22.04` | WSL distribution name |
+
+**Manual steps (if you prefer not to use the script):**
+
+```bash
+# In WSL (wsl -d Ubuntu-22.04):
+
+# 1. Install Ansible + NetApp library
+pip install --user ansible netapp-lib
+
+# 2. Install the ONTAP Ansible collection
+ansible-galaxy collection install netapp.ontap
+
+# 3. Create vault credentials file from template
+cd <workspace>/ansible/s3-bucket-provision/credentials
+cp vault_template.yml vault_credentials_<cluster>.yml
+# Edit the file — replace CHANGEME with the real ONTAP password:
+nano vault_credentials_<cluster>.yml
+
+# 4. Encrypt the file (enter your vault master password when prompted)
+ansible-vault encrypt vault_credentials_<cluster>.yml
+
+# 5. (Optional) Store the vault master password for non-interactive use
+echo 'YOUR_VAULT_PASSWORD' > ~/.vault_pass && chmod 600 ~/.vault_pass
+```
+
+Back in PowerShell, store the same passwords in the credential store so `Invoke-S3Provision.ps1` can use them:
+
+```powershell
+.\credentials\New-Credential.ps1 -Name "ontap_s3"     # same ONTAP password used in step 3
+.\credentials\New-Credential.ps1 -Name "vault_key"    # same vault master password from step 4
+```
+
 ### S3 Bucket Provisioning (`ansible/s3-bucket-provision/`)
 
 Automates S3 bucket creation on ONTAP using the `netapp.ontap` Ansible collection.
