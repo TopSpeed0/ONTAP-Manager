@@ -52,6 +52,8 @@ foreach ($c in $global:Config.ONTAP_Clusters) {
     $obj | Add-Member -MemberType NoteProperty -Name 'Description'  -Value $c.Description
     $obj | Add-Member -MemberType NoteProperty -Name 'FallbackIP'   -Value $c.FallbackIP -Force
     $obj | Add-Member -MemberType NoteProperty -Name 'VIP'          -Value ([bool]$c.VIP) -Force
+    $obj | Add-Member -MemberType NoteProperty -Name 'ONTAP_Select' -Value ([bool]$c.ONTAP_Select) -Force
+    $obj | Add-Member -MemberType NoteProperty -Name 'API_Cred'     -Value $c.API_Cred -Force
     $global:ONTAP_Clusters += $obj
 }
 
@@ -132,6 +134,13 @@ if (`$Command) { ssh admin@$sshHost `$Command } else { ssh admin@$sshHost }
     if ($alias -and $alias -ne $connectName) {
         Set-Alias -Name $alias   -Value $connectName  -Scope Global -Force -ErrorAction SilentlyContinue
         Set-Alias -Name "$alias-s" -Value $sshFuncName -Scope Global -Force -ErrorAction SilentlyContinue
+    }
+
+    # --- ClusterName alias (if differs from both ConnectName and Alias) ---
+    $clusterName = $cl.ClusterName
+    if ($clusterName -and $clusterName -ne $connectName -and $clusterName -ne $alias) {
+        Set-Alias -Name $clusterName       -Value $connectName  -Scope Global -Force -ErrorAction SilentlyContinue
+        Set-Alias -Name "$clusterName-s"   -Value $sshFuncName  -Scope Global -Force -ErrorAction SilentlyContinue
     }
 
     # --- CSV wrapper: Get-<CsvPrefix>Csv ---

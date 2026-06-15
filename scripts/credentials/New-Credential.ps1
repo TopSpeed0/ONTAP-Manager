@@ -12,10 +12,10 @@
 .PARAMETER Force
     Overwrite an existing .cred file without prompting for confirmation.
 .EXAMPLE
-    .\credentials\New-Credential.ps1 -Name "ontap_s3"
+    .\scripts\credentials\New-Credential.ps1 -Name "ontap_s3"
     # Prompts for password interactively and saves credentials\ontap_s3.cred.
 .EXAMPLE
-    .\credentials\New-Credential.ps1 -Name "ontap_s3" -Force
+    .\scripts\credentials\New-Credential.ps1 -Name "ontap_s3" -Force
     # Overwrites ontap_s3.cred without asking.
 .NOTES
     Files produced:
@@ -23,6 +23,7 @@
       credentials\<Name>.cred — encrypted password file
     Both are excluded from git via credentials\.gitignore.
     Retrieve stored passwords with Get-Credential.ps1.
+    Credential data is stored in credentials/ at the workspace root.
 #>
 param(
     [Parameter(Mandatory)]
@@ -31,7 +32,7 @@ param(
     [switch]$Force
 )
 
-$credPath = $PSScriptRoot
+$credPath = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'credentials'
 $keyFile  = Join-Path $credPath "aes.key"
 
 # --- Generate AES key if missing ---

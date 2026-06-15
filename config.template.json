@@ -11,8 +11,10 @@
   },
   "ONTAP_ROUser": "",
   "S3_Config": {
+    "_comment": "Per-cluster S3 settings. CredentialName is consumed by the Ansible S3 playbook. When it matches API_Cred, the standard admin user is reused. A different CredentialName means a dedicated dev/restricted user.",
     "Clusters": {
       "<cluster-alias>": {
+        "_comment": "Explain why this cluster uses this credential (admin reuse vs dedicated dev user).",
         "Vserver": "<s3-svm-name>",
         "S3User": "<s3-object-user>",
         "OntapUsername": "admin",
@@ -46,7 +48,9 @@
       "VIP": false,
       "NdmpPassword": "",
       "SnapmirrorGroup": "",
-      "MainCluster": false
+      "MainCluster": false,
+      "ONTAP_Select": false,
+      "API_Cred": "admin_<clustername>"
     }
   ]
 }

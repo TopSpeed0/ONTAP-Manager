@@ -16,7 +16,7 @@ PDF/*.pdf
 .vscode/mcp.json
 
 # Ansible Vault encrypted credential files (keep vault_template.yml tracked)
-ansible/s3-bucket-provision/credentials/vault_credentials*.yml
+credentials/vault_credentials*.yml
 
 # Site-specific Ansible playbooks (contain real hostnames/IPs — generic version is tracked)
 ansible/s3-bucket-provision/provision_s3_bucket.yml
@@ -41,6 +41,9 @@ scripts/reports/Get-NI-DR-Report*.ps1
 
 # Personal NetApp support cases (raw, contain customer name + internal links)
 .github/Netapp Cases/
+
+# Session logs (personal working notes)
+.github/session-log*.md
 
 # Generated CSV reports (contain real cluster/volume data)
 *.csv

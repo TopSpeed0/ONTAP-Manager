@@ -37,7 +37,7 @@ if (-not $UserName) { throw "No UserName provided and ONTAP_ROUser not set in co
 # Try loading password from credential store, fall back to interactive prompt
 $credFile = Join-Path $rootDir "credentials\$UserName.cred"
 if (Test-Path $credFile) {
-    $secPass = & "$rootDir\credentials\Get-Credential.ps1" -Name $UserName -AsSecureString
+    $secPass = & "$rootDir\scripts\credentials\Get-Credential.ps1" -Name $UserName -AsSecureString
     $cred = New-Object System.Management.Automation.PSCredential($UserName, $secPass)
     Write-Host "Loaded credential from store: $UserName.cred" -ForegroundColor Green
 } else {

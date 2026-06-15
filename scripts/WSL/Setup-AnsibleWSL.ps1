@@ -31,13 +31,13 @@
 
 .EXAMPLE
     # Install Ansible + collection only
-    .\Setup-AnsibleWSL.ps1
+    .\scripts\WSL\Setup-AnsibleWSL.ps1
 
     # Install + create vault file for a cluster
-    .\Setup-AnsibleWSL.ps1 -SetupVault -Cluster MyCluster
+    .\scripts\WSL\Setup-AnsibleWSL.ps1 -SetupVault -Cluster MyCluster
 
     # Vault only (Ansible already installed)
-    .\Setup-AnsibleWSL.ps1 -SetupVault -Cluster MyCluster -SkipInstall
+    .\scripts\WSL\Setup-AnsibleWSL.ps1 -SetupVault -Cluster MyCluster -SkipInstall
 
 .NOTES
     Requires:
@@ -132,17 +132,17 @@ if ($SetupVault) {
     if (-not $credName) { $credName = "ontap_s3" }
 
     # Get ONTAP password from credential store
-    $getCredScript = Join-Path $workspaceRoot "credentials\Get-Credential.ps1"
+    $getCredScript = Join-Path $workspaceRoot "scripts\credentials\Get-Credential.ps1"
     $ontapPassword = & $getCredScript -Name $credName
     if ([string]::IsNullOrWhiteSpace($ontapPassword)) {
-        throw "Credential '$credName' returned empty. Run: .\credentials\New-Credential.ps1 -Name '$credName'"
+        throw "Credential '$credName' returned empty. Run: .\scripts\credentials\New-Credential.ps1 -Name '$credName'"
     }
     Write-Host "  ONTAP credential: $credName.cred" -ForegroundColor White
 
     # Get vault master key
     $vaultKey = & $getCredScript -Name "vault_key"
     if ([string]::IsNullOrWhiteSpace($vaultKey)) {
-        throw "vault_key.cred returned empty. Run: .\credentials\New-Credential.ps1 -Name 'vault_key'"
+        throw "vault_key.cred returned empty. Run: .\scripts\credentials\New-Credential.ps1 -Name 'vault_key'"
     }
     Write-Host "  Vault key: vault_key.cred" -ForegroundColor White
 
@@ -150,9 +150,10 @@ if ($SetupVault) {
     $vaultFileName = $s3Cfg.VaultFile
     if (-not $vaultFileName) {
         $safeAlias = ($clusterObj.Alias -replace '[^a-zA-Z0-9_-]', '_').ToLower()
-        $vaultFileName = "credentials/vault_credentials_$safeAlias.yml"
+        $vaultFileName = "vault_credentials_$safeAlias.yml"
     }
-    $vaultFilePath = Join-Path $PSScriptRoot $vaultFileName
+    $wsRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+    $vaultFilePath = Join-Path $wsRoot "credentials" $vaultFileName
 
     # Write plaintext vault file
     $vaultContent = @"

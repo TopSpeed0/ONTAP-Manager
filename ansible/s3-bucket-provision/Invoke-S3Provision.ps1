@@ -140,7 +140,7 @@ if (-not $S3User)  { throw "S3User is required. Add it to S3_Config in config.js
 $wslPlaybookDir = $PSScriptRoot -replace '\\', '/' -replace '^([A-Za-z]):', { "/mnt/$($_.Groups[1].Value.ToLower())" }
 
 # --- Get ONTAP password from credential store --------------------------------
-$getCredScript = Join-Path $workspaceRoot "credentials\Get-Credential.ps1"
+$getCredScript = Join-Path $workspaceRoot "scripts\credentials\Get-Credential.ps1"
 if (-not (Test-Path -LiteralPath $getCredScript)) {
     throw "Get-Credential.ps1 not found at $getCredScript"
 }
@@ -169,11 +169,13 @@ if ($UseVault) {
     $cleanupWslVaultPass = $wslVaultPassFile
 
     # Verify vault file exists
-    $vaultFilePath = Join-Path $PSScriptRoot $VaultFile
+    # Vault files live in workspace-root credentials/ folder
+    $wsRoot = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
+    $vaultFilePath = Join-Path $wsRoot "credentials" $VaultFile
     if (-not (Test-Path -LiteralPath $vaultFilePath)) {
         throw "Vault file not found: $vaultFilePath"
     }
-    Write-Host "Vault file: $VaultFile ✓" -ForegroundColor Cyan
+    Write-Host "Vault file: credentials/$VaultFile ✓" -ForegroundColor Cyan
 
     # Build extra vars (no password — it comes from the vault file)
     $tempFile    = Join-Path $PSScriptRoot "_provision_vars.json"
@@ -193,7 +195,7 @@ if ($UseVault) {
 
     # Build WSL command with vault
     $wslArgs = @('-d', 'Ubuntu-22.04', '--', 'bash', '--norc', '--noprofile', '-c',
-        "export PATH=/usr/local/bin:/usr/bin:/bin:`$HOME/.local/bin; cd '$wslPlaybookDir'; ansible-playbook provision_s3_bucket_generic.yml -e '@$wslTempFile' -e '@$wslPlaybookDir/$VaultFile' --vault-password-file '$wslVaultPassFile'")
+        "export PATH=/usr/local/bin:/usr/bin:/bin:`$HOME/.local/bin; cd '$wslPlaybookDir'; ansible-playbook provision_s3_bucket_generic.yml -e '@$wslTempFile' -e '@$wslPlaybookDir/../../credentials/$VaultFile' --vault-password-file '$wslVaultPassFile'")
     $authMode = "vault ($VaultFile)"
 
 } else {

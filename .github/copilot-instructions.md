@@ -8,9 +8,15 @@ All cluster definitions live in `config.json` (gitignored) — never hardcode cl
 ## Available Clusters
 
 Clusters are loaded dynamically from `config.json` by `Load-Config.ps1`.
-Each cluster entry has: `ClusterName`, `ConnectName`, `Alias`, `CsvPrefix`, `Description`, `FallbackIP`, `VIP`, `NdmpPassword`, `SnapmirrorGroup`, `MainCluster`.
+Each cluster entry has: `ClusterName`, `ConnectName`, `Alias`, `CsvPrefix`, `Description`, `FallbackIP`, `VIP`, `NdmpPassword`, `SnapmirrorGroup`, `MainCluster`, `ONTAP_Select`, `API_Cred`.
 
-Top-level config keys: `Docs_Port`, `ONTAP_ROUser` (default user for `Test-NetappROUser.ps1`), `NDMP_Config`, `Personal_modules`.
+Top-level config keys: `Docs_Port`, `ONTAP_ROUser` (legacy, used only by `Test-NetappROUser.ps1`), `NDMP_Config`, `S3_Config`, `DFS_Config`, `Personal_modules`.
+
+### API_Cred (per-cluster admin credential)
+Each cluster has `API_Cred` pointing to an AES-encrypted `.cred` file in `credentials/` (e.g., `admin_<clustername>` → `credentials/admin_<clustername>.cred`). This is the admin password used for REST API calls and ZAPI connections. The `ONTAP_ROUser` key is legacy — it was a read-only test user created during initial development; all automation now uses the per-cluster `API_Cred` admin credentials.
+
+### S3_Config credential notes
+`S3_Config.Clusters` has per-cluster S3 settings. Each entry has a `_comment` field in `config.json` explaining why its credential differs. The key design point: `API_Cred` is for general cluster admin, while `S3_Config.CredentialName` is consumed specifically by the Ansible S3 playbook. When both point to the same credential, it's intentional duplication for Ansible's explicit reference.
 
 After `. .\Load-Config.ps1`, the following are auto-generated **per cluster** from `config.json`:
 
@@ -135,18 +141,20 @@ Use the `/pdf-knowledge-import` skill for the full extraction workflow.
 
 Passwords are stored as AES-256 encrypted files in `credentials/` (same pattern as HCI_Manager):
 - `credentials/aes.key` — shared AES-256 encryption key (auto-generated on first use)
-- `credentials/*.cred` — encrypted password files (one per service)
+- `credentials/admin_*.cred` — per-cluster admin passwords (referenced by `API_Cred` in config.json)
+- `credentials/ontap_s3.cred` — S3 dev user password (see `S3_Config._comment` in config.json)
+- `credentials/vault_credentials_*.yml` — Ansible vault files for S3 playbook
 - `credentials/.gitignore` — excludes `aes.key` and `*.cred` from git
 
 ```powershell
 # Store a new password (one-time, interactive)
-.\credentials\New-Credential.ps1 -Name "ontap_s3"
+.\scripts\credentials\New-Credential.ps1 -Name "ontap_s3"
 
 # Retrieve plaintext for automation
-$pwd = & .\credentials\Get-Credential.ps1 -Name "ontap_s3"
+$pwd = & .\scripts\credentials\Get-Credential.ps1 -Name "ontap_s3"
 
 # Retrieve as SecureString (for PSCredential workflows)
-$sec = & .\credentials\Get-Credential.ps1 -Name "ontap_s3" -AsSecureString
+$sec = & .\scripts\credentials\Get-Credential.ps1 -Name "ontap_s3" -AsSecureString
 ```
 
 ## Ansible
@@ -157,6 +165,10 @@ Available playbooks:
 | Playbook | Purpose |
 |----------|--------|
 | `ansible/s3-bucket-provision/provision_s3_bucket.yml` | Create S3 buckets on a cluster |
+
+## Session Logging
+
+At the end of each session, save a summary of work done to `.github/session-log-<date>.md` (e.g., `session-log-2026-06-15.md`). Include: what was changed, why, key decisions, and git state. These files are gitignored.
 
 ## Safety Rules
 

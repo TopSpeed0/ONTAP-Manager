@@ -16,13 +16,14 @@
     [SecureString] — when -AsSecureString is specified.
 .EXAMPLE
     # Plaintext (for Ansible vars_files or env vars)
-    $pwd = & .\credentials\Get-Credential.ps1 -Name "ontap_s3"
+    $pwd = & .\scripts\credentials\Get-Credential.ps1 -Name "ontap_s3"
 .EXAMPLE
     # SecureString (for PSCredential)
-    $sec = & .\credentials\Get-Credential.ps1 -Name "ontap_s3" -AsSecureString
+    $sec = & .\scripts\credentials\Get-Credential.ps1 -Name "ontap_s3" -AsSecureString
 .NOTES
     Requires New-Credential.ps1 to have been run at least once to generate
     aes.key and the target .cred file.
+    Credential data is stored in credentials/ at the workspace root.
 #>
 param(
     [Parameter(Mandatory)]
@@ -31,7 +32,7 @@ param(
     [switch]$AsSecureString
 )
 
-$credPath = $PSScriptRoot
+$credPath = Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) 'credentials'
 $keyFile  = Join-Path $credPath "aes.key"
 $credFile = Join-Path $credPath "$Name.cred"
 
