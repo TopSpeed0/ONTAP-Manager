@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ONTAP Manager — Docs</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg-deep: #020617;
+    --bg-base: #0d1117;
+    --bg-elevated: #161b22;
+    --surface: rgba(255,255,255,0.04);
+    --surface-hover: rgba(255,255,255,0.08);
+    --glass: rgba(255,255,255,0.06);
+    --glass-border: rgba(255,255,255,0.1);
+    --glass-blur: 20px;
+    --foreground: #e6edf3;
+    --foreground-muted: #8b949e;
+    --accent: #58a6ff;
+    --accent-glow: rgba(88,166,255,0.25);
+    --green: #3fb950;
+    --orange: #d29922;
+    --red: #f85149;
+    --border: #30363d;
+    --radius: 12px;
+    --font-heading: 'Lexend', sans-serif;
+    --font-body: 'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  }
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    background: var(--bg-base);
+    color: var(--foreground);
+    font-family: var(--font-body);
+    line-height: 1.6;
+    overflow-x: hidden;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  /* ── Animated background ── */
+  .bg-animation {
+    position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+    z-index: 0; pointer-events: none; overflow: hidden;
+  }
+  .blob {
+    position: absolute; border-radius: 50%;
+    filter: blur(80px); opacity: 0.06;
+    animation: float 20s ease-in-out infinite;
+  }
+  .blob-1 { width: 600px; height: 600px; background: var(--accent); top: -200px; right: -100px; }
+  .blob-2 { width: 500px; height: 500px; background: #6366f1; bottom: -150px; left: -100px; animation-delay: -7s; animation-duration: 25s; }
+  .blob-3 { width: 400px; height: 400px; background: var(--green); top: 50%; left: 50%; transform: translate(-50%,-50%); animation-delay: -14s; animation-duration: 30s; }
+  @keyframes float {
+    0%,100% { transform: translate(0,0) scale(1); }
+    25%     { transform: translate(50px,-30px) scale(1.05); }
+    50%     { transform: translate(-30px,50px) scale(0.95); }
+    75%     { transform: translate(30px,30px) scale(1.02); }
+  }
+
+  /* ── Header ── */
+  .header {
+    position: relative; z-index: 2;
+    padding: 1.2rem 2rem;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 1rem;
+    background: rgba(13,17,23,0.85);
+    backdrop-filter: blur(12px);
+  }
+  .header h1 {
+    font-family: var(--font-heading);
+    font-size: 1.25rem; font-weight: 600;
+  }
+  .header h1 span { color: var(--accent); }
+  .header .subtitle {
+    color: var(--foreground-muted);
+    font-size: 0.8rem;
+  }
+
+  /* ── Layout ── */
+  .main-container {
+    position: relative; z-index: 1;
+    display: flex;
+    min-height: calc(100vh - 60px);
+  }
+
+  /* ── Sidebar ── */
+  .sidebar {
+    width: 280px;
+    min-width: 280px;
+    padding: 1rem 0;
+    border-right: 1px solid var(--border);
+    overflow-y: auto;
+    background: rgba(22,27,34,0.6);
+    backdrop-filter: blur(12px);
+  }
+  .sidebar h3 {
+    font-family: var(--font-heading);
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--foreground-muted);
+    padding: 0.8rem 1.2rem 0.3rem;
+  }
+  .doc-item {
+    display: flex; align-items: center; gap: 0.5rem;
+    padding: 0.45rem 1.2rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+    color: var(--foreground-muted);
+    transition: all 0.15s;
+    border-left: 3px solid transparent;
+  }
+  .doc-item:hover {
+    background: var(--surface-hover);
+    color: var(--foreground);
+  }
+  .doc-item.active {
+    color: var(--accent);
+    background: rgba(88,166,255,0.08);
+    border-left-color: var(--accent);
+    font-weight: 500;
+  }
+  .doc-item .icon { flex-shrink: 0; width: 1.2em; text-align: center; }
+
+  /* ── Content ── */
+  .content {
+    flex: 1;
+    padding: 2rem 3rem;
+    overflow-y: auto;
+    max-width: 900px;
+  }
+  .loading {
+    text-align: center;
+    padding: 4rem;
+    color: var(--foreground-muted);
+    font-size: 1.1rem;
+  }
+  .file-path {
+    font-size: 0.75rem;
+    color: var(--foreground-muted);
+    padding: 0.4rem 0.8rem;
+    background: var(--surface);
+    border-radius: 6px;
+    margin-bottom: 1.5rem;
+    display: flex; align-items: center; gap: 0.6rem;
+    flex-wrap: wrap;
+  }
+  .file-path .btn {
+    font-size: 0.72rem;
+    padding: 0.2rem 0.6rem;
+    border-radius: 4px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--accent);
+    cursor: pointer;
+    text-decoration: none;
+    transition: background 0.15s;
+  }
+  .file-path .btn:hover { background: var(--surface-hover); }
+
+  /* ── Markdown rendering ── */
+  .md-content h1 { font-family: var(--font-heading); font-size: 1.8rem; font-weight: 600; margin: 0 0 0.6rem; padding-bottom: 0.4rem; border-bottom: 1px solid var(--border); }
+  .md-content h2 { font-family: var(--font-heading); font-size: 1.3rem; font-weight: 600; margin: 2rem 0 0.5rem; padding-bottom: 0.3rem; border-bottom: 1px solid var(--border); }
+  .md-content h3 { font-family: var(--font-heading); font-size: 1.05rem; font-weight: 600; margin: 1.5rem 0 0.4rem; }
+  .md-content h4 { font-family: var(--font-heading); font-size: 0.9rem; font-weight: 600; margin: 1.2rem 0 0.3rem; }
+  .md-content p  { margin: 0.5rem 0; color: var(--foreground); }
+  .md-content ul, .md-content ol { padding-left: 1.5rem; margin: 0.5rem 0; }
+  .md-content li { margin: 0.25rem 0; }
+  .md-content a { color: var(--accent); text-decoration: none; }
+  .md-content a:hover { text-decoration: underline; }
+  .md-content code {
+    font-family: 'Cascadia Code', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.82rem;
+    background: rgba(110,118,129,0.2);
+    padding: 0.15em 0.4em;
+    border-radius: 4px;
+  }
+  .md-content pre {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin: 0.8rem 0;
+  }
+  .md-content pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.82rem;
+    line-height: 1.5;
+  }
+  .md-content blockquote {
+    border-left: 3px solid var(--accent);
+    padding: 0.4rem 1rem;
+    margin: 0.8rem 0;
+    color: var(--foreground-muted);
+    background: rgba(88,166,255,0.05);
+    border-radius: 0 6px 6px 0;
+  }
+  .md-content table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin: 0.8rem 0;
+  }
+  .md-content thead th {
+    background: rgba(110,118,129,0.1);
+    text-align: left;
+    padding: 0.6rem 0.8rem;
+    font-weight: 600;
+    color: var(--foreground-muted);
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--border);
+  }
+  .md-content tbody td {
+    padding: 0.5rem 0.8rem;
+    border-bottom: 1px solid var(--border);
+  }
+  .md-content tbody tr:last-child td { border-bottom: none; }
+  .md-content tbody tr:hover { background: rgba(110,118,129,0.06); }
+  .md-content img { max-width: 100%; border-radius: 8px; margin: 0.5rem 0; }
+  .md-content hr  { border: none; border-top: 1px solid var(--border); margin: 1.5rem 0; }
+
+  /* ── Cluster widget (injected from config.json) ── */
+  .cluster-stats {
+    display: flex; gap: 0.8rem; margin: 1rem 0; flex-wrap: wrap;
+  }
+  .cluster-stats .card {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 0.7rem 1.2rem;
+    min-width: 110px; flex: 1;
+  }
+  .cluster-stats .card .label {
+    color: var(--foreground-muted);
+    font-size: 0.68rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+  .cluster-stats .card .value {
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  .badge {
+    display: inline-block; padding: 0.12em 0.5em;
+    border-radius: 10px; font-size: 0.68rem;
+    font-weight: 600; text-transform: uppercase;
+  }
+  .badge-prod   { background: rgba(63,185,80,0.15);  color: var(--green); }
+  .badge-dr     { background: rgba(210,153,34,0.15); color: var(--orange); }
+  .badge-lab    { background: rgba(88,166,255,0.15); color: var(--accent); }
+  .badge-legacy { background: rgba(139,148,158,0.15); color: var(--foreground-muted); }
+
+  .cluster-table-wrap {
+    background: var(--bg-elevated);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    overflow: hidden; margin: 0.5rem 0 1.5rem;
+  }
+  .cluster-table-wrap table { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+  .cluster-table-wrap thead th {
+    background: rgba(110,118,129,0.1);
+    text-align: left; padding: 0.6rem 0.8rem;
+    font-weight: 600; color: var(--foreground-muted);
+    font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.04em; border-bottom: 1px solid var(--border);
+  }
+  .cluster-table-wrap tbody td { padding: 0.5rem 0.8rem; border-bottom: 1px solid var(--border); }
+  .cluster-table-wrap tbody tr:last-child td { border-bottom: none; }
+  .cluster-table-wrap tbody tr:hover { background: rgba(110,118,129,0.06); }
+
+  /* ── Fullscreen toggle ── */
+  .fullscreen-btn {
+    position: fixed; bottom: 1.2rem; right: 1.2rem; z-index: 99;
+    background: var(--bg-elevated); border: 1px solid var(--border);
+    color: var(--foreground-muted); border-radius: 8px;
+    padding: 0.5rem 0.7rem; cursor: pointer; font-size: 1rem;
+    transition: all 0.15s;
+  }
+  .fullscreen-btn:hover { background: var(--surface-hover); color: var(--foreground); }
+
+  /* ── Responsive ── */
+  @media (max-width: 768px) {
+    .main-container { flex-direction: column; }
+    .sidebar { width: 100%; min-width: 100%; border-right: none; border-bottom: 1px solid var(--border); max-height: 40vh; }
+    .content { padding: 1.2rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Animated Background -->
+<div class="bg-animation">
+  <div class="blob blob-1"></div>
+  <div class="blob blob-2"></div>
+  <div class="blob blob-3"></div>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <h1><span>ONTAP</span> Manager</h1>
+  <span class="subtitle">Documentation Hub</span>
+</div>
+
+<!-- Layout -->
+<div class="main-container">
+  <div class="sidebar" id="sidebar"><!-- built by JS --></div>
+  <div class="content" id="content">
+    <div class="loading">📚 Select a document from the sidebar</div>
+  </div>
+</div>
+
+<button class="fullscreen-btn" onclick="toggleFullscreen()" title="Toggle fullscreen (F)">⛶</button>
+
+<script>
+// ─── Document registry ───────────────────────────────────────────────
+const DOCS = {
+  '📘 Project': [
+    { name: 'README',                  path: '../README.MD',                         icon: '📄' },
+    { name: 'Setup Guide',             path: 'setup-21st-magic.md',                  icon: '🔧' },
+    { name: 'Ansible S3 Playbook',     path: '../ansible/s3-bucket-provision/README.md', icon: '📦' },
+  ],
+  '🛠️ Skills': [
+    { name: 'Volume Management',       path: '../.github/skills/volume-management/SKILL.md',       icon: '💾' },
+    { name: 'SnapMirror Management',   path: '../.github/skills/snapmirror-management/SKILL.md',   icon: '🔄' },
+    { name: 'SVM Management',          path: '../.github/skills/svm-management/SKILL.md',          icon: '🖥️' },
+    { name: 'SVM-DR',                  path: '../.github/skills/svm-dr/SKILL.md',                  icon: '🛡️' },
+    { name: 'S3 Management',           path: '../.github/skills/s3-management/SKILL.md',           icon: '🪣' },
+    { name: 'Network Management',      path: '../.github/skills/network-management/SKILL.md',      icon: '🌐' },
+    { name: 'Cluster Info',            path: '../.github/skills/ontap-cluster-info/SKILL.md',      icon: '📊' },
+    { name: 'Quota Management',        path: '../.github/skills/quota-management/SKILL.md',        icon: '📏' },
+    { name: 'iSCSI Management',        path: '../.github/skills/iscsi-management/SKILL.md',        icon: '🔌' },
+    { name: 'DFS Management',          path: '../.github/skills/dfs-management/SKILL.md',          icon: '📂' },
+    { name: 'NDMP Copy',               path: '../.github/skills/ndmp-copy/SKILL.md',               icon: '📋' },
+    { name: 'PDF Knowledge Import',    path: '../.github/skills/pdf-knowledge-import/SKILL.md',    icon: '📑' },
+  ],
+  '📚 References': [
+    { name: 'Volume ONTAP Reference',     path: '../.github/skills/volume-management/references/volume-ontap-reference.md',           icon: '📖' },
+    { name: 'SnapMirror ONTAP Reference',  path: '../.github/skills/snapmirror-management/references/snapmirror-ontap-reference.md',  icon: '📖' },
+    { name: 'SVM ONTAP Reference',         path: '../.github/skills/svm-management/references/svm-ontap-reference.md',                icon: '📖' },
+    { name: 'SVM-DR ONTAP Reference',      path: '../.github/skills/svm-dr/references/svm-dr-ontap-reference.md',                     icon: '📖' },
+    { name: 'S3 ONTAP Reference',          path: '../.github/skills/s3-management/references/s3-ontap-reference.md',                  icon: '📖' },
+    { name: 'S3 Client Operations',        path: '../.github/skills/s3-management/references/s3-client-operations.md',                icon: '📖' },
+    { name: 'Network ONTAP Reference',     path: '../.github/skills/network-management/references/network-ontap-reference.md',        icon: '📖' },
+    { name: 'Cluster ONTAP Reference',     path: '../.github/skills/ontap-cluster-info/references/cluster-ontap-reference.md',        icon: '📖' },
+  ],
+};
+
+// ─── Sidebar builder ─────────────────────────────────────────────────
+function buildSidebar() {
+  const sb = document.getElementById('sidebar');
+  sb.innerHTML = '';
+  for (const [category, docs] of Object.entries(DOCS)) {
+    const h = document.createElement('h3');
+    h.textContent = category;
+    sb.appendChild(h);
+    for (const doc of docs) {
+      const el = document.createElement('div');
+      el.className = 'doc-item';
+      el.dataset.path = doc.path;
+      el.innerHTML = `<span class="icon">${doc.icon}</span>${doc.name}`;
+      el.onclick = () => loadDoc(doc.path, doc.name);
+      sb.appendChild(el);
+    }
+  }
+}
+
+// ─── Load & render a markdown file ───────────────────────────────────
+async function loadDoc(path, name) {
+  const content = document.getElementById('content');
+  content.innerHTML = '<div class="loading">⏳ Loading...</div>';
+
+  // Update URL hash for direct linking
+  const newHash = '#' + encodeURIComponent(path);
+  if (window.location.hash !== newHash) {
+    history.pushState(null, '', newHash);
+  }
+
+  // Mark active
+  document.querySelectorAll('.doc-item').forEach(el => el.classList.remove('active'));
+  const activeEl = document.querySelector(`[data-path="${CSS.escape(path)}"]`);
+  if (activeEl) activeEl.classList.add('active');
+
+  try {
+    const res = await fetch(path + '?t=' + Date.now());
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const text = await res.text();
+
+    const html = marked.parse(text);
+    const fileName = path.split('/').pop();
+    const shareUrl = window.location.origin + window.location.pathname + newHash;
+
+    content.innerHTML = `
+      <div class="file-path">
+        📄 ${path}
+        <a class="btn" href="${path}" download="${fileName}" title="Download ${fileName}">⬇ Download</a>
+        <button class="btn" onclick="copyLink(this,'${shareUrl}')" title="Copy direct link">🔗 Copy Link</button>
+      </div>
+      <div class="md-content">${html}</div>
+    `;
+
+    // Add IDs to headings for anchor links
+    const slugCounts = {};
+    content.querySelectorAll('.md-content h1, .md-content h2, .md-content h3, .md-content h4').forEach(h => {
+      let slug = h.textContent.toLowerCase()
+        .replace(/[^\w\s\u0590-\u05FF.-]/g, '').trim()
+        .replace(/\s+/g, '-').replace(/^-+|-+$/g, '');
+      if (slugCounts[slug] !== undefined) { slugCounts[slug]++; slug += '-' + slugCounts[slug]; }
+      else { slugCounts[slug] = 0; }
+      h.id = slug;
+    });
+
+    // Smooth-scroll in-page anchors
+    content.querySelectorAll('.md-content a[href^="#"]').forEach(a => {
+      a.addEventListener('click', e => {
+        e.preventDefault();
+        const raw = decodeURIComponent(a.getAttribute('href').slice(1));
+        const target = document.getElementById(raw)
+          || [...content.querySelectorAll('h1[id],h2[id],h3[id],h4[id]')]
+               .find(el => el.id === raw.toLowerCase().replace(/[^\w.-]/g,'').replace(/\s+/g,'-'));
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    // Inject cluster widget if this is the README
+    if (path.includes('README')) {
+      injectClusterWidget(content);
+    }
+
+    content.scrollTop = 0;
+  } catch (err) {
+    content.innerHTML = `<div class="loading">❌ Failed to load <code>${path}</code><br><small>${err.message}</small></div>`;
+  }
+}
+
+// ─── Cluster widget injection (from config.json) ─────────────────────
+function classifyCluster(desc) {
+  const d = (desc || '').toLowerCase();
+  if (d.includes('dr') || d.includes('disaster'))  return 'dr';
+  if (d.includes('legacy'))                         return 'legacy';
+  if (d.includes('lab') || d.includes('s3') || d.includes('k8s')) return 'lab';
+  return 'prod';
+}
+
+async function injectClusterWidget(container) {
+  const headings = container.querySelectorAll('.md-content h2');
+  let target = null;
+  for (const h of headings) {
+    if (h.textContent.includes('Clusters')) { target = h; break; }
+  }
+  if (!target) return;
+
+  let config;
+  try {
+    const res = await fetch('../config.json?t=' + Date.now());
+    if (!res.ok) return;
+    config = await res.json();
+  } catch { return; }
+
+  const clusters = config.ONTAP_Clusters || [];
+  if (!clusters.length) return;
+
+  const types = clusters.map(c => classifyCluster(c.Description));
+  const prodCount  = types.filter(t => t === 'prod').length;
+  const drCount    = types.filter(t => t === 'dr').length;
+  const otherCount = clusters.length - prodCount - drCount;
+
+  const badgeFor = t => {
+    const m = { prod:'PROD', dr:'DR', lab:'LAB', legacy:'LEGACY' };
+    return `<span class="badge badge-${t}">${m[t]}</span>`;
+  };
+
+  let rows = '';
+  for (let i = 0; i < clusters.length; i++) {
+    const c = clusters[i];
+    const alias = c.Alias || c.ConnectName;
+    rows += `<tr>
+      <td><code>${alias}</code></td>
+      <td><code>${c.ClusterName}</code></td>
+      <td>${badgeFor(types[i])}</td>
+      <td><code>${alias}-s</code></td>
+      <td><code>${c.ConnectName}</code></td>
+      <td><code>Get-${c.CsvPrefix}Csv</code></td>
+      <td>${c.Description || ''}</td>
+    </tr>`;
+  }
+
+  const widget = document.createElement('div');
+  widget.innerHTML = `
+    <div class="cluster-stats">
+      <div class="card"><div class="label">Clusters</div><div class="value">${clusters.length}</div></div>
+      <div class="card"><div class="label">Production</div><div class="value" style="color:var(--green)">${prodCount}</div></div>
+      <div class="card"><div class="label">DR</div><div class="value" style="color:var(--orange)">${drCount}</div></div>
+      <div class="card"><div class="label">Other</div><div class="value" style="color:var(--foreground-muted)">${otherCount}</div></div>
+    </div>
+    <div class="cluster-table-wrap"><table>
+      <thead><tr><th>Alias</th><th>Cluster</th><th>Type</th><th>SSH</th><th>Connect</th><th>CSV Helper</th><th>Description</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table></div>
+  `;
+
+  // Replace the markdown-rendered cluster table with the rich widget
+  // Find and remove everything between the Clusters h2 and the next h2
+  let el = target.nextElementSibling;
+  const toRemove = [];
+  while (el && el.tagName !== 'H2' && el.tagName !== 'H1') {
+    // Stop if we hit the CLUSTER-TABLE:END comment or next section
+    if (el.textContent.includes('CLUSTER-TABLE:END')) { toRemove.push(el); break; }
+    toRemove.push(el);
+    el = el.nextElementSibling;
+  }
+  toRemove.forEach(e => e.remove());
+  target.after(widget);
+}
+
+// ─── Helpers ─────────────────────────────────────────────────────────
+function copyLink(btn, url) {
+  navigator.clipboard.writeText(url).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = '✓ Copied';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+}
+
+function toggleFullscreen() {
+  if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+  else document.exitFullscreen();
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'f' && !e.ctrlKey && !e.metaKey && document.activeElement.tagName !== 'INPUT') {
+    toggleFullscreen();
+  }
+});
+
+// ─── Init ────────────────────────────────────────────────────────────
+buildSidebar();
+
+// Load doc from hash or default to README
+const hash = decodeURIComponent(window.location.hash.slice(1));
+if (hash) {
+  loadDoc(hash, hash.split('/').pop());
+} else {
+  loadDoc('../README.MD', 'README');
+}
+
+// Handle browser back/forward
+window.addEventListener('popstate', () => {
+  const h = decodeURIComponent(window.location.hash.slice(1));
+  if (h) loadDoc(h, h.split('/').pop());
+});
+</script>
+</body>
+</html>

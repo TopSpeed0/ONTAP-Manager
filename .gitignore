@@ -6,6 +6,8 @@ config.json
 
 # Generated HTML (loads from config.json — not for git)
 *.html
+# Exception: docs hub SPA is tracked (cluster data injected at runtime from config.json)
+!docs/index.html
 
 # PDF files are large — track separately or exclude from git
 PDF/*.pdf
