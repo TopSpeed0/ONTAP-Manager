@@ -75,7 +75,7 @@ function Get-SasDiag {
     }
 
     # Collect results for CSV export
-    $results = [System.Collections.Generic.List[PSCustomObject]]::()
+    $results = [System.Collections.Generic.List[PSCustomObject]]::new()
     # Collect structured results for JSON export
     $jsonData = [ordered]@{
         Cluster   = $Cluster
