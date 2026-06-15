@@ -2,6 +2,24 @@
 
 AI-assisted automation workspace for NetApp ONTAP cluster administration. Combines PowerShell SSH/CSV helpers, the DataONTAP PowerShell Toolkit, a curated case knowledge base, and a library of domain skills used by GitHub Copilot agents.
 
+## Table of Contents
+
+- [Quick Start](#quick-start)
+- [Clusters](#clusters)
+- [Key PowerShell Helpers](#key-powershell-helpers)
+- [Repository Layout](#repository-layout)
+- [Skills](#skills)
+- [Agents](#agents)
+- [Scripts](#scripts)
+- [Knowledge Base](#knowledge-base)
+- [Conventions](#conventions)
+- [Personal Scripts Library](#personal-scripts-library)
+- [Credential Store](#credential-store)
+- [Ansible](#ansible)
+  - [First-Time Setup](#first-time-setup)
+  - [S3 Bucket Provisioning](#s3-bucket-provisioning-ansibles3-bucket-provision)
+- [See Also](#see-also)
+
 ## Quick Start
 
 ```powershell
