@@ -128,12 +128,33 @@
   }
   .doc-item .icon { flex-shrink: 0; width: 1.2em; text-align: center; }
 
+  /* ── Resize handle ── */
+  .resize-handle {
+    width: 5px;
+    cursor: col-resize;
+    background: transparent;
+    transition: background 0.2s;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 5;
+  }
+  .resize-handle:hover, .resize-handle.dragging {
+    background: var(--accent);
+  }
+  .resize-handle::after {
+    content: '';
+    position: absolute;
+    top: 0; bottom: 0;
+    left: -3px; right: -3px;
+  }
+
   /* ── Content ── */
   .content {
     flex: 1;
     padding: 2rem 3rem;
     overflow-y: auto;
-    max-width: 900px;
+    max-width: 1400px;
+    min-width: 400px;
   }
   .loading {
     text-align: center;
@@ -315,6 +336,7 @@
 <!-- Layout -->
 <div class="main-container">
   <div class="sidebar" id="sidebar"><!-- built by JS --></div>
+  <div class="resize-handle" id="resizeHandle"></div>
   <div class="content" id="content">
     <div class="loading">📚 Select a document from the sidebar</div>
   </div>
@@ -542,6 +564,36 @@ document.addEventListener('keydown', e => {
     toggleFullscreen();
   }
 });
+
+// ─── Resize handle ───────────────────────────────────────────────────
+(function() {
+  const handle  = document.getElementById('resizeHandle');
+  const sidebar = document.getElementById('sidebar');
+  let dragging = false;
+
+  handle.addEventListener('mousedown', e => {
+    e.preventDefault();
+    dragging = true;
+    handle.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const newWidth = Math.max(180, Math.min(e.clientX, 600));
+    sidebar.style.width = newWidth + 'px';
+    sidebar.style.minWidth = newWidth + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false;
+    handle.classList.remove('dragging');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  });
+})();
 
 // ─── Init ────────────────────────────────────────────────────────────
 buildSidebar();
