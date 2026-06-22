@@ -3,6 +3,8 @@
 
 # Local config with real cluster names, IPs, paths (template is tracked)
 config.json
+Config_shareMig.json
+PROJECT-DIGEST.md
 
 # Generated HTML (loads from config.json — not for git)
 *.html

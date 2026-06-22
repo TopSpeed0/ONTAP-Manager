@@ -166,6 +166,36 @@ Available playbooks:
 |----------|--------|
 | `ansible/s3-bucket-provision/provision_s3_bucket.yml` | Create S3 buckets on a cluster |
 
+## Script Manager
+
+`Start-ScriptManager` (alias `sm`) provides a GUI/console launcher for workspace scripts. Loaded by `profile1.ps1`.
+
+```powershell
+Start-ScriptManager              # GUI grid view (Out-GridView)
+Start-ScriptManager -Console     # Console numbered menu
+sm -Filter "share"               # Pre-filter by keyword
+```
+
+The registry lives in `scripts/Start-ScriptManager.ps1`. To add a new script, append a `[pscustomobject]` entry to the `$scripts` array in that file.
+
+## Share Migration
+
+Export and import SMB share configuration + ACLs for SVM domain migration. Config: `Config_shareMig.json` (gitignored; template: `Config_shareMig.template.json`). Skill: `.github/skills/share-migration/`.
+
+```powershell
+# Preflight validation
+.\scripts\share-migration\Invoke-ShareMigration.ps1 -Mode Preflight -ApprovePreflight
+
+# Export shares + ACLs to JSON snapshot
+.\scripts\share-migration\Invoke-ShareMigration.ps1 -Mode Export
+
+# Import from snapshot after domain move
+.\scripts\share-migration\Invoke-ShareMigration.ps1 -Mode Import -SnapshotPath <path>
+
+# Export + Import in one pass
+.\scripts\share-migration\Invoke-ShareMigration.ps1 -Mode Sync
+```
+
 ## Session Logging
 
 At the end of each session, save a summary of work done to `.github/session-log-<date>.md` (e.g., `session-log-2026-06-15.md`). Include: what was changed, why, key decisions, and git state. These files are gitignored.

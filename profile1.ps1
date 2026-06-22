@@ -12,3 +12,12 @@ Import-Module NetApp.ONTAP -ErrorAction SilentlyContinue
 # Creates per-cluster: connect func, SSH func (-s), CSV wrapper (Get-<Prefix>Csv), aliases
 $rootDir = $PSScriptRoot
 . "$PSScriptRoot\Load-Config.ps1"
+
+# === Script Manager ===
+# Quick launcher for workspace automation scripts (GUI or console menu)
+function global:Start-ScriptManager {
+    [CmdletBinding()]
+    param([switch]$Console, [string]$Filter)
+    & "$PSScriptRoot\scripts\Start-ScriptManager.ps1" @PSBoundParameters
+}
+Set-Alias -Name sm -Value Start-ScriptManager -Scope Global -Force
