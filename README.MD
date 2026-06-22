@@ -11,6 +11,7 @@ AI-assisted automation workspace for NetApp ONTAP cluster administration. Combin
 - [Skills](#skills)
 - [Agents](#agents)
 - [Scripts](#scripts)
+  - [Share Migration](#share-migration-scriptsshare-migrationinvoke-sharemigrationps1)
 - [Knowledge Base](#knowledge-base)
 - [Conventions](#conventions)
 - [Personal Scripts Library](#personal-scripts-library)
