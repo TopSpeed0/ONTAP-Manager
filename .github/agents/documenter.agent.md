@@ -61,9 +61,12 @@ Determine which skill folder maps to this script:
 - `scripts/ndmp-copy/` → `ndmp-copy`
 - `scripts/quota/` → `quota-management`
 - `scripts/reports/` → `snapmirror-management` (DR reports)
+- `scripts/share-migration/` → `share-migration`
 - `scripts/snapmirror/` → `snapmirror-management`
 - `scripts/snapshots/` → `ontap-cluster-info` or new skill
 - `scripts/testing/` → `ontap-cluster-info`
+- `scripts/credentials/` → (no skill — utility)
+- `scripts/Start-ScriptManager.ps1` → (no skill — launcher)
 
 Read the matching `SKILL.md` and check:
 - Does it reference the script by name?
