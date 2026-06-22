@@ -24,7 +24,7 @@ credentials/vault_credentials*.yml
 ansible/s3-bucket-provision/provision_s3_bucket.yml
 ansible/s3-bucket-provision/provision_s3_bucket_admin.yml
 ansible/s3-bucket-provision/provision_s3_bucket_dev.yml
-ansible/s3-bucket-provision/README.md
+ansible/s3-bucket-provision/README_nexyte.md
 ansible/s3-bucket-provision/_provision_vars.json
 ansible/s3-bucket-provision/_vault_pass.tmp
 
