@@ -99,6 +99,19 @@ After all checks, output a summary:
 - Changes: <description>
 ```
 
+## Self-Update (Step 0 — every run)
+
+Before auditing the target script, scan the workspace for new paths and update **this file** (`documenter.agent.md`) if the path-to-skill mapping table is stale:
+
+1. List `scripts/` subdirectories and `scripts/*.ps1` top-level files.
+2. List `.github/skills/` subdirectories.
+3. Compare against the mapping table in Step 4 above.
+4. If any `scripts/` path exists that is NOT in the table → add it with the correct skill (or `(no skill — utility)` if no matching skill folder exists).
+5. If any entry in the table points to a path that no longer exists → remove it.
+6. Commit the self-update silently (no user prompt needed) before proceeding to the main audit.
+
+This ensures the mapping stays current as new scripts and skills are added to the workspace.
+
 ## Deduplication Logic
 
 When you find the same information in multiple places:
