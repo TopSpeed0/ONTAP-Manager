@@ -105,9 +105,11 @@ scripts/
   ndmp-copy/                 # NDMP cross-cluster file copy (Ndmp_Copy.ps1, ndmp-copy.bat)
   quota/                     # Qtree quota manager
   reports/                   # NI DR reports (SSH + ZAPI versions)
+  share-migration/           # SMB share export/import & CIFS domain migration
   snapmirror/                # SnapMirror monitoring
   snapshots/                 # Snapshot analysis
   testing/                   # Cluster connectivity tests
+  Start-ScriptManager.ps1    # GUI/console launcher for all scripts (alias: sm)
 PDF/                         # NetApp documentation PDFs
 ```
 
@@ -122,6 +124,7 @@ Each fer under [.github/skills/](.github/skills/) contains a `SKILL.md` with sco
 - [ontap-cluster-info](.github/skills/ontap-cluster-info/) — Cluster reconnaissance & inventory
 - [pdf-knowledge-import](.github/skills/pdf-knowledge-import/) — Extract PDF docs into skill references
 - [s3-management](.github/skills/s3-management/) — ONTAP S3 servers, buckets, users, policies
+- [share-migration](.github/skills/share-migration/) — SMB share export/import & CIFS domain migration
 - [snapmirror-management](.github/skills/snapmirror-management/) — Volume & SVM SnapMirror lifecycle
 - [svm-dr](.github/skills/svm-dr/) — SVM-DR setup, failover, failback
 - [svm-management](.github/skills/svm-management/) — SVM creation, NAS/SAN protocol config
@@ -210,6 +213,29 @@ Tests ONTAP user credentials against all clusters defined in `config.json`. Load
 ### SAS Diagnostics (`scripts/disk/sas-diag.ps1`)
 
 Comprehensive SAS / disk / shelf connectivity diagnostics for any ONTAP cluster. Runs 11 checks via SSH and resolves the cluster from `config.json`. Verifies SSH connectivity before running.
+
+### Share Migration (`scripts/share-migration/Invoke-ShareMigration.ps1`)
+
+Automated SMB share export/import and CIFS domain migration. Supports full round-trip: migrate SVM to a new AD domain and roll back if needed. All IPs, domains, and credentials are config-driven (`Config_shareMig.json`, gitignored; template: `Config_shareMig.template.json`).
+
+See [share-migration README](scripts/share-migration/README.md) for iron rules on CIFS operation order.
+
+```powershell
+# Export shares + ACLs
+.\scripts\share-migration\Invoke-ShareMigration.ps1 -Mode Export
+
+# Full domain migration (7 steps)
+.\scripts\share-migration\Invoke-ShareMigration.ps1 -Mode DomainMigration
+
+# Rollback to source domain (5 steps)
+.\scripts\share-migration\Invoke-ShareMigration.ps1 -Mode Rollback
+
+# Or use Script Manager
+Start-ScriptManager   # GUI
+sm -Console           # Console menu
+```
+
+Modes: `Export`, `Import`, `Sync`, `Preflight`, `DomainMigration`, `Rollback`, `TestCredentials`, `ResetCifsPassword`
 
 Exported function: **`Get-SasDiag`**
 
