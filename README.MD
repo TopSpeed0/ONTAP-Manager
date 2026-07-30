@@ -1,0 +1,618 @@
+# NetApp ONTAP Automation Workspace
+
+AI-assisted automation workspace for NetApp ONTAP cluster administration. Combines PowerShell SSH/CSV helpers, the DataONTAP PowerShell Toolkit, a curated case knowledge base, and a library of domain skills used by GitHub Copilot agents.
+
+## Table of Contents
+
+- [NetApp ONTAP Automation Workspace](#netapp-ontap-automation-workspace)
+  - [Table of Contents](#table-of-contents)
+  - [Quick Start](#quick-start)
+    - [One-Liner Launch](#one-liner-launch)
+  - [Clusters](#clusters)
+  - [Key PowerShell Helpers](#key-powershell-helpers)
+  - [Repository Layout](#repository-layout)
+  - [Skills](#skills)
+  - [Agents](#agents)
+  - [Scripts](#scripts)
+    - [DR Report (`scripts/reports/Get-DR-Report.ps1`)](#dr-report-scriptsreportsget-dr-reportps1)
+    - [Quota Manager (`scripts/quota/Clusters Quota Policy Manger.ps1`)](#quota-manager-scriptsquotaclusters-quota-policy-mangerps1)
+    - [NDMP Copy (`scripts/ndmp-copy/Ndmp_Copy.ps1`)](#ndmp-copy-scriptsndmp-copyndmp_copyps1)
+    - [Biggest Snapshots (`scripts/snapshots/Get-BiggestSnapshot.ps1`)](#biggest-snapshots-scriptssnapshotsget-biggestsnapshotps1)
+    - [Snapshot Comparison (`scripts/snapshots/Get-SnapshotComparison.ps1`)](#snapshot-comparison-scriptssnapshotsget-snapshotcomparisonps1)
+    - [Test ONTAP User (`scripts/testing/Test-NetappROUser.ps1`)](#test-ontap-user-scriptstestingtest-netapprouserps1)
+    - [SAS Diagnostics (`scripts/disk/sas-diag.ps1`)](#sas-diagnostics-scriptsdisksas-diagps1)
+    - [Share Migration (`scripts/share-migration/Invoke-ShareMigration.ps1`)](#share-migration-scriptsshare-migrationinvoke-sharemigrationps1)
+    - [DFS Cleanup (`scripts/dfs-cleanup/Invoke-DFSDecommission.ps1`)](#dfs-cleanup-scriptsdfs-cleanupinvoke-dfsdecommissionps1)
+  - [Knowledge Base](#knowledge-base)
+  - [Conventions](#conventions)
+  - [Personal Scripts Library](#personal-scripts-library)
+  - [See Also](#see-also)
+  - [Credential Store](#credential-store)
+    - [`credentials.json` — Credential Registry](#credentialsjson--credential-registry)
+    - [`New-Credential.ps1` — Store a Password](#new-credentialps1--store-a-password)
+    - [`Get-Credential.ps1` — Retrieve a Password](#get-credentialps1--retrieve-a-password)
+  - [Ansible](#ansible)
+    - [First-Time Setup](#first-time-setup)
+    - [S3 Bucket Provisioning (`ansible/s3-bucket-provision/`)](#s3-bucket-provisioning-ansibles3-bucket-provision)
+
+## Quick Start
+
+```powershell
+# 1. Clone the repo
+git clone <repo-url> && cd Netapp-Code-WorkSpace
+
+# 2. First run — creates config.json from template automatically
+. .\Load-Config.ps1
+# ⚠ Edit config.json with your real cluster names, then re-run:
+. .\Load-Config.ps1
+
+# 3. You're ready — every cluster now has auto-generated functions:
+<cluster>-ssh -Command "vol show"           # SSH one-liner
+Get-<Alias>Csv -Command "vol show -fields vserver,volume,size,used"  # CSV → objects
+<cluster>                                  # Connect-NcController session (ZAPI)
+```
+
+> **What happens on `. .\Load-Config.ps1`?**
+> 1. If `config.json` doesn't exist, copies `config.template.json` → `config.json` and stops
+> 2. Reads `config.json`, builds `$global:ONTAP_Clusters` array
+> 3. Auto-generates per-cluster functions: `<cluster>`, `<cluster>-ssh`, `Get-<Alias>Csv`, aliases
+> 4. Loads personal modules from `Personal_modules` in config.json
+> 5. Sets up ONTAP credentials (Jenkins env vars or interactive fallback)
+> 6. One-liner to launch everything: `.\Start-Docs.ps1` — checks Python, starts docs hub, loads config
+
+### One-Liner Launch
+
+```powershell
+.\Start-Docs.ps1
+```
+
+This single script:
+- Checks if Python is installed (auto-installs via `winget` if missing)
+- Starts an HTTP server on the port from `config.json` (`Docs_Port`, default `8080`)
+- Opens the docs hub in your browser
+- Dot-sources `Load-Config.ps1` so all cluster functions are ready in your session
+
+Copy `config.template.json` → `config.json` and fill in your cluster details. `Load-Config.ps1` auto-generates per-cluster functions:
+
+## Clusters
+
+<!-- Dynamically replaced by the docs hub with a rich table from config.json -->
+
+| Function Pattern | Purpose |
+|-----------------|---------|
+| `<cluster>` | `Connect-NcController` session (ZAPI) |
+| `<cluster>-ssh [-Command "..."]` | SSH shortcut (interactive or one-shot) |
+| `Get-<Alias>Csv -Command "..."` | SSH + CSV parse → PowerShell objects |
+| `<Alias>` / `<Alias>-ssh` | Short aliases (when Alias ≠ cluster) |
+
+## Key PowerShell Helpers
+
+- **`Get-<Alias>Csv -Command "<ontap cli>"`** — runs an ONTAP CLI command via SSH, parses CSV, returns objects.
+- **`<alias>-ssh [-Command "..."]`** — direct SSH shortcut per cluster (interactive or one-shot).
+- **`connect-ncController` aliases** — DataONTAP PowerShell Toolkit (ZAPI) sessions.
+
+```powershell
+# Examples (replace <cluster> and <Alias> with your values from config.json)
+Get-<Alias>Csv -Command "vol show -fields vserver,volume,size,used"
+<cluster>-ssh -Command "snapmirror show"
+```
+
+## Repository Layout
+
+```
+config.json                  # Cluster definitions (gitignored — real data)
+config.template.json         # Template for  users (tracked)
+Config_shareMig.template.json    # Share-migration template (tracked)
+Config_DFSCleanup.template.json  # DFS cleanup / FSA template (tracked)
+SKILL.md                   # Project-owned workspace skill index (Claude/Hermes canonical source)
+CLAUDE.md                  # Claude-specific entry layer; links to the workspace skill tree
+Load-Config.ps1              # Central config loader — auto-generates functions
+Start-Docs.ps1               # One-liner: Python check + docs server + config load
+Switch-Branch.ps1            # public-clean status/switch/publish helper
+profile1.ps1                 # Workspace profile — modules + dot-sources Load-Config
+.github/
+  agents/                    # Custom Copilot agents (@sanitizer, etc.)
+  copilot-instructions.md    # Agent instructions & conventions
+  Netapp Cases/              # Curated NetApp support case summaries (KB)
+  skills/                    # Domain skills loaded by the agent
+ansible/
+  s3-bucket-provision/       # Ansible playbook for S3 bucket provisioning
+credentials/                 # AES-encrypted credential store
+  New-Credential.ps1         # Store a password (AES-256 encrypt → .cred)
+  Get-Credential.ps1         # Retrieve a stored password (plaintext or SecureString)
+scripts/
+  disk/                      # SAS/shelf diagnostics (sas-diag.ps1)
+  ndmp-copy/                 # NDMP cross-cluster file copy (Ndmp_Copy.ps1, ndmp-copy.bat)
+  quota/                     # Qtree quota manager
+  reports/                   # NI DR reports (SSH + ZAPI versions)
+  share-migration/           # SMB share export/import & CIFS domain migration
+  dfs-cleanup/               # FSA-backed DFS share / qtree decommission workflow
+  snapmirror/                # SnapMirror monitoring
+  snapshots/                 # Snapshot analysis
+  testing/                   # Cluster connectivity and offline safety tests
+  Start-ScriptManager.ps1    # GUI/console launcher for all scripts (alias: sm)
+PDF/                         # NetApp documentation PDFs
+```
+
+## Skills
+
+Each folder under [.github/skills/](.github/skills/) contains a `SKILL.md` with scoped instructions and references:
+
+- [dfs-management](.github/skills/dfs-management/) — DFS namespace / CIFS widelink resolution
+- [dfs-cleanup](.github/skills/dfs-cleanup/) — Evidence-based DFS share, qtree and volume decommissioning
+- [iscsi-management](.github/skills/iscsi-management/) — iSCSI sessions, connections, igroups
+- [network-management](.github/skills/network-management/) — LIFs, broadcast domains, routes, VLANs
+- [ndmp-copy](.github/skills/ndmp-copy/) — NDMP cross-cluster file copy (prerequisites, procedure, config)
+- [ontap-cluster-info](.github/skills/ontap-cluster-info/) — Cluster reconnaissance & inventory
+- [pdf-knowledge-import](.github/skills/pdf-knowledge-import/) — Extract PDF docs into skill references
+- [s3-management](.github/skills/s3-management/) — ONTAP S3 servers, buckets, users, policies
+- [share-migration](.github/skills/share-migration/) — SMB share export/import & CIFS domain migration
+- [snapmirror-management](.github/skills/snapmirror-management/) — Volume & SVM SnapMirror lifecycle
+- [snapshot-comparison](.github/skills/snapshot-comparison/) — Read-only cross-cluster snapshot inventory, age/size rankings & candidates
+- [svm-dr](.github/skills/svm-dr/) — SVM-DR setup, failover, failback
+- [svm-management](.github/skills/svm-management/) — SVM creation, NAS/SAN protocol config
+- [volume-management](.github/skills/volume-management/) — Volume create/resize/move/clone
+
+## Agents
+
+Custom agents live in [.github/agents/](.github/agents/) and appear in the VS Code chat agent picker (`@`):
+
+| Agent | Description | Example |
+|-------|-------------|---------|
+| `@sanitizer` | Scrub sensitive data from files for the public repo | `@sanitizer clean scripts/quota/Clusters Quota Policy Manger.ps1` |
+| `@documenter` | Audit & enhance docs for a script across README, copilot-instructions, and skills | `@documenter scripts/disk/sas-diag.ps1` |
+| `@case-sanitizer` | Convert personal NetApp cases to generic KnownIssues articles | `@case-sanitizer all` |
+
+`@sanitizer` scans a file for hardcoded cluster names, IPs, FQDNs, personal paths, and credentials (cross-referencing `config.json`), replaces them with generic `<placeholder>` patterns, then updates README, copilot-instructions, and skill files if they reference the changed content. Finishes with a verification grep.
+
+## Scripts
+
+### DR Report (`scripts/reports/Get-DR-Report.ps1`)
+
+SnapMirror DR coverage report — groups clusters by `SnapmirrorGroup` from `config.json`.
+
+```powershell
+# All groups
+.\scripts\reports\Get-DR-Report.ps1
+
+# Corp group only
+.\scripts\reports\Get-DR-Report.ps1 -SMirrorG Corp
+
+# NI group only
+.\scripts\reports\Get-DR-Report.ps1 -SnapmirrorGroup NI
+```
+
+Outputs a CSV with per-volume DR status, outbound/inbound mirrors, health, lag, and a per-group summary.
+
+### Quota Manager (`scripts/quota/Clusters Quota Policy Manger.ps1`)
+
+Interactive qtree quota viewer and resizer. Auto-connects to the first `MainCluster` from config if no cluster session is active.
+
+```powershell
+.\scripts\quota\Clusters Quota Policy Manger.ps1
+```
+
+### NDMP Copy (`scripts/ndmp-copy/Ndmp_Copy.ps1`)
+
+Config-driven cross-cluster (or same-cluster) file copy via NDMP. All parameters default from `NDMP_Config` in `config.json`. Requires `NetApp.ONTAP` module. A batch wrapper (`ndmp-copy.bat`) is also available for quick command-line use.
+
+See [ndmp-copy skill](.github/skills/ndmp-copy/SKILL.md) for prerequisites, NDMP enable steps, and detailed procedure.
+
+```powershell
+# Zero-config — uses SrcCluster, DstCluster, SRC, DST from config.json:
+.\scripts\ndmp-copy\Ndmp_Copy.ps1
+
+# Override with explicit params:
+.\scripts\ndmp-copy\Ndmp_Copy.ps1 -SrcCluster SrcAlias -DstCluster DstAlias -SourcePath "/src_svm/src_vol/path" -DestPath "/dst_svm/dst_vol/path"
+
+# Batch wrapper (positional args or zero-config):
+.\scripts\ndmp-copy\ndmp-copy.bat
+```
+
+### Biggest Snapshots (`scripts/snapshots/Get-BiggestSnapshot.ps1`)
+
+Queries all clusters via SSH and reports the top 20 largest snapshots.
+
+```powershell
+.\scripts\snapshots\Get-BiggestSnapshot.ps1
+```
+
+### Snapshot Comparison (`scripts/snapshots/Get-SnapshotComparison.ps1`)
+
+Cross-cluster snapshot inventory and comparison. Reports every snapshot, the oldest, the largest, and the records crossing configurable age / size thresholds, per cluster and combined. Clusters come from `config.json` via `Get-OntapTargetClusters` — never a hardcoded list. Skill: [.github/skills/snapshot-comparison/](.github/skills/snapshot-comparison/).
+
+This is additive to `Get-BiggestSnapshot.ps1` above, which is unchanged: that one answers "biggest snapshots", this one adds the age dimension, thresholds, per-cluster comparison and offline replay.
+
+**Read-only safety contract**
+
+- The only ONTAP command it can issue is `vol snapshot show`. It never deletes, creates, modifies, renames or restores a snapshot, and never touches `snapshot autodelete`.
+- The command is built by `Get-SnapshotInventoryCommand`, which throws if a mutating verb ever appears in the string it produced — so a future edit that adds a delete path fails locally, before any cluster is contacted.
+- Both source files are scanned for mutating command strings by the offline test suite.
+- A candidate list is **not** a safe-to-delete list. Snapshots held by a clone, dump or SnapMirror are flagged `Locked` / `LockReason`. Acting on a candidate is a separate, deliberate, human decision.
+- Records whose size or creation time could not be read get `$null`, never `0`, and are listed in `snapshots-unknown.csv` instead of being ranked as "smallest" or "newest".
+
+```powershell
+# Every cluster in config.json — defaults: age >= 90 d, size >= 100 GiB
+.\scripts\snapshots\Get-SnapshotComparison.ps1
+
+# One cluster (Alias or cluster name), tighter thresholds, deeper rankings
+.\scripts\snapshots\Get-SnapshotComparison.ps1 -Cluster <alias> -AgeDays 30 -LargeThresholdGB 50 -TopOldest 200
+
+# Narrow ONTAP-side, not after collection
+.\scripts\snapshots\Get-SnapshotComparison.ps1 -Cluster <alias> -Svm <svm> -Volume <vol>
+```
+
+Reports land in `scripts/snapshots/reports/<timestamp>/` (`snapshots-all`, `-oldest`, `-largest`, `-old-candidates`, `-large-candidates`, `-unknown`, `cluster-summary`, `problems`, plus `snapshots.json`). That whole tree is gitignored — the captures and the JSON carry real cluster, SVM and volume names.
+
+**Offline replay — re-threshold, or produce a report with no cluster contact**
+
+`-SaveRaw` keeps each cluster's untouched SSH output under `raw\<cluster>.txt`; `-ReplayFrom` rebuilds every report from those files and contacts no cluster:
+
+```powershell
+# Capture once
+.\scripts\snapshots\Get-SnapshotComparison.ps1 -VIP -SaveRaw
+
+# Re-threshold that capture as often as you like — offline
+.\scripts\snapshots\Get-SnapshotComparison.ps1 -ReplayFrom .\scripts\snapshots\reports\<stamp> -AgeDays 365
+```
+
+The same mechanism produces a demo report from the tracked test fixtures, with no cluster and no real data — useful for checking the output format or a reporting change:
+
+```powershell
+$out = 'scripts\snapshots\reports\offline-fixture'
+New-Item -ItemType Directory -Force -Path "$out\raw" | Out-Null
+Copy-Item scripts\testing\fixtures\snapshots\Cluster[AB].txt "$out\raw\"
+.\scripts\snapshots\Get-SnapshotComparison.ps1 -ReplayFrom $out -OutputPath $out
+```
+
+Output is gitignored like any other report, so regenerate it with the snippet above rather than expecting it in a fresh clone. Expect one deliberate `problems.csv` row: `ClusterA.txt` contains a truncated line, and the parser is meant to reject it instead of guessing.
+
+**Offline tests**
+
+```powershell
+.\scripts\testing\Test-SnapshotComparisonScripts.ps1
+```
+
+70 checks, no cluster contact: syntax, module surface, ONTAP field validation, size / timestamp parsing, three real parsing regressions (ONTAP reorders columns; the banner is not a fixed line count; `Load-Config.ps1` clobbers a `-Cluster` parameter unless dot-sourced inside a function), ranking and thresholds, an end-to-end driver run in `-ReplayFrom` mode, the read-only guarantee, and Script Manager registration.
+
+### Test ONTAP User (`scripts/testing/Test-NetappROUser.ps1`)
+
+Tests ONTAP user credentials against all clusters defined in `config.json`. Loads the password from the credential store (`credentials/<UserName>.cred`) if available, otherwise prompts interactively. Reports a table with Cluster, Status (OK/FAILED), Version, and Name.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `-UserName` | string | No | `ONTAP_ROUser` from config.json | The ONTAP user name to test |
+
+```powershell
+# Test the default read-only user from config.json
+.\scripts\testing\Test-NetappROUser.ps1
+
+# Test a specific user (prompts for password if no .cred file)
+.\scripts\testing\Test-NetappROUser.ps1 -UserName admin
+```
+
+### SAS Diagnostics (`scripts/disk/sas-diag.ps1`)
+
+Comprehensive SAS / disk / shelf connectivity diagnostics for any ONTAP cluster. Runs 11 checks via SSH and resolves the cluster from `config.json`. Verifies SSH connectivity before running.
+
+### Share Migration (`scripts/share-migration/Invoke-ShareMigration.ps1`)
+
+Automated SMB share export/import and CIFS domain migration. Supports full round-trip: migrate SVM to a new AD domain and roll back if needed. All IPs, domains, and credentials are config-driven (`Config_shareMig.json`, gitignored; template: `Config_shareMig.template.json`).
+
+See [share-migration README](scripts/share-migration/README.md) for iron rules on CIFS operation order.
+
+```powershell
+# Export shares + ACLs
+.\scripts\share-migration\Invoke-ShareMigration.ps1 -Mode Export
+
+# Full domain migration (7 steps)
+.\scripts\share-migration\Invoke-ShareMigration.ps1 -Mode DomainMigration
+
+# Rollback to source domain (5 steps)
+.\scripts\share-migration\Invoke-ShareMigration.ps1 -Mode Rollback
+
+# Or use Script Manager
+Start-ScriptManager   # GUI
+sm -Console           # Console menu
+```
+
+Modes: `Export`, `Import`, `Sync`, `Preflight`, `DomainMigration`, `Rollback`, `TestCredentials`, `ResetCifsPassword`
+
+### DFS Cleanup (`scripts/dfs-cleanup/Invoke-DFSDecommission.ps1`)
+
+Evidence-based cleanup of DFS-backed CIFS shares, qtrees, volumes, and subfolders. The feature is
+documented in the project-local [DFS Cleanup skill](.github/skills/dfs-cleanup/SKILL.md) and the
+[workflow README](scripts/dfs-cleanup/README.md). Its normal workflow is **Preflight → Resolve →
+Report → human approval → Delete**; no candidate is automatically a deletion target.
+
+```powershell
+# Read-only: confirm analytics and access-time data are trustworthy
+.\scripts\dfs-cleanup\Invoke-DFSDecommission.ps1 -Mode Preflight
+
+# Read-only: resolve tracker paths and report evidence into the configured workbook
+.\scripts\dfs-cleanup\Invoke-DFSDecommission.ps1 -Mode Resolve -FromExcel
+.\scripts\dfs-cleanup\Invoke-DFSDecommission.ps1 -Mode Report -FromExcel -PerFileProof
+
+# Offline safety tests — no cluster, credential, workbook, or deletion activity
+.\scripts\testing\Test-DFSCleanupScripts.ps1
+```
+
+Deletion is deliberately gated by a prior verdict report, `Approved=YES`, per-target interactive
+confirmation, protected-volume checks, and separate Phase 1 / Phase 2 controls. Do not put a
+delete command into an unattended launcher.
+
+Exported function: **`Get-SasDiag`**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `-Cluster` | string | Yes (positional) | Cluster name or alias from `config.json` |
+| `-Shelf` | int | No | Limit disk-path detail (step 9) to a specific shelf |
+| `-Export` | switch | No | Export flat results to `<Cluster>_SAS_diag.csv` |
+| `-Json` | switch | No | Export structured/parsed results to `<Cluster>_SAS_diag.json` (preferred) |
+
+```powershell
+# Dot-source to load the function
+. .\scripts\disk\sas-diag.ps1
+
+# Console output only
+Get-SasDiag <cluster>
+
+# Filter to a specific shelf
+Get-SasDiag <cluster> -Shelf 2
+
+# Structured JSON export (preferred — parses -fields commands into objects)
+Get-SasDiag <cluster> -Json
+
+# Flat CSV export
+Get-SasDiag <cluster> -Export
+```
+
+See [ontap-cluster-info skill](.github/skills/ontap-cluster-info/SKILL.md) for the full list of 11 diagnostic checks.
+
+## Knowledge Base
+
+- **[KnownIssues/](KnownIssues/)** — Generic, sanitized ONTAP known-issue articles (tracked in git). Generated from personal case files by `@case-sanitizer`.
+- **`.github/Netapp Cases/`** — Raw NetApp support case summaries (gitignored — personal data). The agent searches this first when diagnosing errors or alerts.
+- **[PDF/](PDF/)** — NetApp documentation PDFs, imported into skill references via the `pdf-knowledge-import` skill.
+
+## Conventions
+
+- Prefer `Get-<Alias>Csv` for structured ONTAP data; use `-fields` to select specific columns.
+- When the user says "cluster" without an alias, ask which one.
+- Show the plan before executing multi-step procedures.
+- **Always confirm** destructive ops (`vol delete`, `vol offline`, `vserver delete`, `snapmirror break`, `snapmirror delete`).
+
+## Personal Scripts Library
+
+Point the agent to your local scripts folder in `.github/copilot-instructions.md`. Existing modules like `Get-DFSNameSpaceRoot.psm1` and `Get-NcVolAvil.psm1` are loaded by `Load-Config.ps1`.
+
+## See Also
+
+- Full agent instructions: [.github/copilot-instructions.md](.github/copilot-instructions.md)
+
+## Credential Store
+
+Passwords are stored as AES-256 encrypted files in `credentials/` (same pattern as HCI_Manager).
+Files `aes.key` and `*.cred` are `.gitignore`d. A credential registry (`credentials.json`) maps each `.cred` name to its associated username.
+
+### `credentials.json` — Credential Registry
+
+Git-tracked JSON file mapping credential name → username. Scripts use this to resolve usernames automatically without requiring them in every config file. Resolution chain: **config override → registry → fallback**.
+
+### `New-Credential.ps1` — Store a Password
+
+Encrypts a password using AES-256 and saves it as a `.cred` file. Auto-generates `aes.key` on first use. When `-UserName` is provided, also updates `credentials.json`.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `-Name` | string | Yes | — | Name for the credential file (saved as `<Name>.cred`) |
+| `-UserName` | string | No | — | Associated username — stored in `credentials.json` registry |
+| `-Force` | switch | No | — | Overwrite existing `.cred` file without prompting |
+
+```powershell
+# One-time: store a password with username (prompts interactively)
+.\scripts\credentials\New-Credential.ps1 -Name "ontap_s3" -UserName "sm_s3_dev"
+
+# Overwrite an existing credential
+.\scripts\credentials\New-Credential.ps1 -Name "ontap_s3" -Force
+```
+
+### `Get-Credential.ps1` — Retrieve a Password
+
+Decrypts a `.cred` file using the shared AES key. Returns plaintext by default.
+
+| Parameter | Type | Required | Default | Description |
+|-----------|------|----------|---------|-------------|
+| `-Name` | string | Yes | — | Name of the credential file to decrypt |
+| `-AsSecureString` | switch | No | — | Return `[SecureString]` instead of plaintext |
+| `-AsPSCredential` | switch | No | — | Return `[PSCredential]` (username from registry) |
+| `-IncludeUserName` | switch | No | — | Return hashtable with `Name`, `UserName`, `Password` |
+
+```powershell
+# Retrieve plaintext (for Ansible, CLI, env vars)
+$pwd = & .\scripts\credentials\Get-Credential.ps1 -Name "ontap_s3"
+
+# Retrieve as PSCredential (username from registry)
+$cred = & .\scripts\credentials\Get-Credential.ps1 -Name "ontap_s3" -AsPSCredential
+
+# Retrieve as SecureString (for PSCredential workflows)
+$sec = & .\scripts\credentials\Get-Credential.ps1 -Name "ontap_s3" -AsSecureString
+
+# Retrieve password + username hashtable
+$info = & .\scripts\credentials\Get-Credential.ps1 -Name "ontap_s3" -IncludeUserName
+```
+
+## Ansible
+
+Ansible CLI doesn't run natively on Windows. Use **WSL** (`wsl -d Ubuntu-22.04`, Ansible at `~/.local/bin/`).
+
+### First-Time Setup
+
+A setup script automates WSL prerequisites. Manual steps are listed below for reference.
+
+**Automated (recommended):**
+
+```powershell
+# 1. Store your ONTAP credentials (one-time, interactive prompts)
+.\credentials\New-Credential.ps1 -Name "ontap_s3"     # ONTAP password for S3 cluster
+.\credentials\New-Credential.ps1 -Name "vault_key"    # Ansible vault master password
+
+# 2. Install Ansible in WSL + create encrypted vault file
+.\ansible\s3-bucket-provision\Setup-AnsibleWSL.ps1 -SetupVault -Cluster <cluster-alias>
+
+# 3. Test (dry-run — shows command without executing)
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 -Cluster <cluster-alias> -BucketName test -DryRun
+```
+
+`Setup-AnsibleWSL.ps1` does the following automatically:
+1. Installs `ansible` and `netapp-lib` via pip in WSL
+2. Installs the `netapp.ontap` Ansible Galaxy collection
+3. Creates a vault credentials YAML from the credential store and encrypts it with `ansible-vault`
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `-SetupVault` | No | — | Also create + encrypt vault file for a cluster |
+| `-Cluster` | With `-SetupVault` | — | Cluster alias from `config.json` |
+| `-SkipInstall` | No | — | Skip pip/collection install (vault only) |
+| `-WslDistro` | No | `Ubuntu-22.04` | WSL distribution name |
+
+**Manual steps (if you prefer not to use the script):**
+
+```bash
+# In WSL (wsl -d Ubuntu-22.04):
+
+# 1. Install Ansible + NetApp library
+pip install --user ansible netapp-lib
+
+# 2. Install the ONTAP Ansible collection
+ansible-galaxy collection install netapp.ontap
+
+# 3. Create vault credentials file from template
+cd <workspace>/ansible/s3-bucket-provision/credentials
+cp vault_template.yml vault_credentials_<cluster>.yml
+# Edit the file — replace CHANGEME with the real ONTAP password:
+nano vault_credentials_<cluster>.yml
+
+# 4. Encrypt the file (enter your vault master password when prompted)
+ansible-vault encrypt vault_credentials_<cluster>.yml
+
+# 5. (Optional) Store the vault master password for non-interactive use
+echo 'YOUR_VAULT_PASSWORD' > ~/.vault_pass && chmod 600 ~/.vault_pass
+```
+
+Back in PowerShell, store the same passwords in the credential store so `Invoke-S3Provision.ps1` can use them:
+
+```powershell
+.\credentials\New-Credential.ps1 -Name "ontap_s3"     # same ONTAP password used in step 3
+.\credentials\New-Credential.ps1 -Name "vault_key"    # same vault master password from step 4
+```
+
+### S3 Bucket Provisioning (`ansible/s3-bucket-provision/`)
+
+Automates S3 bucket creation on ONTAP using the `netapp.ontap` Ansible collection.
+
+**Playbooks:**
+
+| Playbook | Description |
+|----------|-------------|
+| `provision_s3_bucket_generic.yml` | Generic — works with any cluster/SVM (pass connection vars via `-e`) |
+| `provision_s3_bucket_admin.yml` | Site-specific, cluster admin credentials (gitignored) |
+| `provision_s3_bucket_dev.yml` | Site-specific, SVM dev user credentials (gitignored) |
+
+**Quick start:**
+
+```bash
+# Install prerequisites
+pip install ansible netapp-lib
+ansible-galaxy collection install netapp.ontap
+
+# Set vault password (one-time)
+echo 'YOUR_VAULT_PASSWORD' > ~/.vault_pass && chmod 600 ~/.vault_pass
+
+# Provision a bucket (generic playbook — pass all connection params)
+ansible-playbook ansible/s3-bucket-provision/provision_s3_bucket_generic.yml \
+  -e "ontap_hostname=<cluster-name> ontap_vserver=<s3-svm> ontap_password=<password> bucket_name=my-bucket"
+```
+
+**From PowerShell (wrapper — recommended):**
+
+`Invoke-S3Provision.ps1` resolves cluster hostname, SVM, S3 user, credentials, and vault file from `config.json` (`S3_Config` section) automatically. Only `-Cluster` and `-BucketName` are mandatory when `S3_Config` is defined:
+
+```powershell
+# Minimal — everything from config.json S3_Config
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 `
+  -Cluster <cluster-alias> -BucketName my-bucket
+
+# Another cluster — all details from config
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 `
+  -Cluster <cluster-alias-2> -BucketName data-lake
+
+# Vault mode — uses vault_key.cred + vault credentials file from config
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 `
+  -Cluster <cluster-alias> -BucketName my-bucket -UseVault
+
+# Override S3 user from config
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 `
+  -Cluster <cluster-alias-2> -BucketName data-lake -S3User custom-user
+
+# Custom size
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 `
+  -Cluster <cluster-alias> -BucketName big-bucket -BucketSize 500GB
+
+# Dry-run — shows the ansible-playbook command without executing
+.\ansible\s3-bucket-provision\Invoke-S3Provision.ps1 `
+  -Cluster <cluster-alias> -BucketName test -DryRun
+```
+
+| Parameter | Required | Default | Description |
+|-----------|----------|---------|-------------|
+| `-Cluster` | **Yes** | — | Cluster alias or name from `config.json` |
+| `-BucketName` | **Yes** | — | S3 bucket name |
+| `-Vserver` | No | from `S3_Config` | SVM name hosting the S3 server |
+| `-S3User` | No | from `S3_Config` | S3 user granted access via bucket policy |
+| `-CredentialName` | No | from `S3_Config` | Name of `.cred` file in `credentials/` |
+| `-UseVault` | No | — | Use vault-based auth instead of direct creds |
+| `-VaultFile` | No | from `S3_Config` | Vault credentials YAML (relative to playbook dir) |
+| `-OntapUsername` | No | `admin` | ONTAP login user |
+| `-BucketSize` | No | `100GB` | Human-readable size (min ~95 GB) |
+| `-DryRun` | No | — | Show command without executing |
+
+`config.json` S3_Config section maps per-cluster defaults:
+
+```json
+"S3_Config": {
+  "Clusters": {
+    "<cluster-alias>": {
+      "Vserver": "<s3-svm-name>",
+      "S3User": "<s3-object-user>",
+      "OntapUsername": "admin",
+      "CredentialName": "<cred-file-name>",
+      "VaultFile": "credentials/<vault-file>.yml"
+    }
+  }
+}
+```
+
+**From WSL directly (manual):**
+
+```powershell
+$pw = & .\credentials\Get-Credential.ps1 -Name "ontap_s3"
+wsl -d Ubuntu-22.04 -- bash --norc --noprofile -c "export PATH=/usr/local/bin:/usr/bin:/bin:`$HOME/.local/bin; cd '<workspace-wsl-path>/ansible/s3-bucket-provision'; ansible-playbook provision_s3_bucket_generic.yml -e 'ontap_hostname=<cluster-name> ontap_vserver=<s3-svm> ontap_password=$pw bucket_name=my-bucket'"
+```
+
+**Variables:**
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `bucket_name` | **Yes** | — | S3 bucket name |
+| `bucket_size` | No | `107374182400` (100 GB) | Bucket size in bytes (min ~95 GB) |
+| `bucket_comment` | No | `"Provisioned by Ansible DevOps automation"` | Bucket description |
+| `s3_user` | No | `<s3-user>` | S3 user granted access via bucket policy |
+| `ontap_hostname` | **Yes** | — | Cluster or SVM management hostname/IP |
+| `ontap_vserver` | **Yes** | — | SVM name |
+| `ontap_username` | No | `admin` | ONTAP user |
+| `ontap_password` | **Yes** | — | ONTAP password (or use vault) |
+
+Vault credentials are stored in `ansible/s3-bucket-provision/credentials/` (encrypted with `ansible-vault`, gitignored). The vault master password is stored in both WSL (`~/.vault_pass`) and the PowerShell credential store (`credentials/vault_key.cred`).
+
+**Troubleshooting tip:** If Ansible returns `400 Bad Request` against an SVM LIF, ensure the LIF's service policy does NOT include `data-s3-server` — S3 hijacks port 443 and breaks REST API. Use separate LIFs for S3 data and management.

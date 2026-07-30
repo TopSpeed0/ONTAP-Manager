@@ -1,0 +1,155 @@
+# Load-Config.ps1 — Shared config loader for ONTAP automation scripts.
+# Usage:  $rootDir = (Resolve-Path "$PSScriptRoot\..").Path   # or repo root
+#         . "$rootDir\Load-Config.ps1"
+# Falls back to $PSScriptRoot if $rootDir is not set.
+
+if (-not $rootDir) {
+    $rootDir = $PSScriptRoot
+}
+
+$global:ConfigPath = Join-Path $rootDir 'config.json'
+$_templatePath     = Join-Path $rootDir 'config.template.json'
+
+# --- Auto-copy template if config.json doesn't exist -----------------------
+if (-not (Test-Path -LiteralPath $global:ConfigPath)) {
+    if (Test-Path -LiteralPath $_templatePath) {
+        Write-Host "config.json not found — creating from config.template.json ..." -ForegroundColor Yellow
+        Copy-Item -LiteralPath $_templatePath -Destination $global:ConfigPath
+        Write-Host "Created $global:ConfigPath — please edit it with your cluster details, then re-run." -ForegroundColor Yellow
+        throw "Load-Config.ps1: config.json was just created from template. Edit it before running again."
+    }
+    else {
+        throw "Load-Config.ps1: Neither config.json nor config.template.json found in $rootDir"
+    }
+}
+
+# --- Load and validate -----------------------------------------------------
+$global:Config = Get-Content -LiteralPath $global:ConfigPath -Raw | ConvertFrom-Json
+
+# Guard: if the _comment field still contains the template marker, the user
+# hasn't customised config.json yet.
+if ($global:Config._comment -and $global:Config._comment -match 'Copy this file to config\.json') {
+    throw "Load-Config.ps1: config.json still contains the template placeher. Edit it with your real cluster details before running."
+}
+
+# --- Personal modules (optional, from config.json) -------------------------
+if ($global:Config.Personal_modules) {
+    foreach ($_mod in $global:Config.Personal_modules) {
+        if (Test-Path $_mod) {
+            Import-Module $_mod -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+# --- ONTAP clusters ---------------------------------------------------------
+$global:ONTAP_Clusters = @()
+foreach ($c in $global:Config.ONTAP_Clusters) {
+    $obj = New-Object System.Object
+    $obj | Add-Member -MemberType NoteProperty -Name 'cluster'      -Value $c.cluster
+    $obj | Add-Member -MemberType NoteProperty -Name 'Alias'        -Value $c.Alias
+    $obj | Add-Member -MemberType NoteProperty -Name 'CsvPrefix'    -Value $c.Alias
+    $obj | Add-Member -MemberType NoteProperty -Name 'Description'  -Value $c.Description
+    $obj | Add-Member -MemberType NoteProperty -Name 'FallbackIP'   -Value $c.FallbackIP -Force
+    $obj | Add-Member -MemberType NoteProperty -Name 'VIP'          -Value ([bool]$c.VIP) -Force
+    $obj | Add-Member -MemberType NoteProperty -Name 'ONTAP_Select' -Value ([bool]$c.ONTAP_Select) -Force
+    $obj | Add-Member -MemberType NoteProperty -Name 'API_Cred'     -Value $c.API_Cred -Force
+    $global:ONTAP_Clusters += $obj
+}
+
+# --- VIP / cluster selection helpers ----------------------------------------
+# Scripts use: $targets = Get-OntapTargetClusters [-Cluster "Prod"] [-VIP]
+# - No params     → all clusters
+# - -VIP          → only VIP-marked clusters (or all if none are VIP)
+# - -Cluster "X"  → specific cluster by Alias or cluster
+function global:Get-OntapTargetClusters {
+    [CmdletBinding()]
+    param(
+        [string]$Cluster,
+        [switch]$VIP
+    )
+    if ($Cluster) {
+        $match = $global:ONTAP_Clusters | Where-Object {
+            $_.Alias -eq $Cluster -or $_.cluster -eq $Cluster
+        }
+        if (-not $match) { throw "Cluster '$Cluster' not found in config.json" }
+        return @($match)
+    }
+    if ($VIP) {
+        $vips = $global:ONTAP_Clusters | Where-Object { $_.VIP -eq $true }
+        if ($vips) { return @($vips) }
+        # Fallback: if no VIP marked, return all
+        return @($global:ONTAP_Clusters)
+    }
+    return @($global:ONTAP_Clusters)
+}
+
+# --- ONTAP read-only user (for testing / RO operations) ---------------------
+$global:ONTAP_ROUser = $global:Config.ONTAP_ROUser
+
+# --- Generic CSV helper (must be defined before per-cluster wrappers) -------
+function global:Invoke-OntapCsv {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory=$true)] [string]$SshFunction,
+        [Parameter(Mandatory=$true)] [string]$Command,
+        [string[]]$Headers
+    )
+    $wrapped = "set diagnostic -confirmations off -showseparator ','; row 0 ; $Command"
+    $output = & $SshFunction -Command $wrapped | awk 'NR>8' | ForEach-Object { $_ -replace "'","" }
+    if ($Headers) {
+        $output | ConvertFrom-Csv -Header $Headers
+    } else {
+        $output | ConvertFrom-Csv
+    }
+}
+
+# --- Auto-generate connect / SSH / CSV functions per cluster ----------------
+# For each cluster in config.json, creates up to 4 items:
+#   1) <cluster>    → Connect-NcController function
+#   2) <cluster>-ssh  → SSH function (admin@host)
+#   3) Get-<Alias>Csv → Invoke-OntapCsv wrapper
+#   4) Alias + Alias-ssh  → if Alias differs from cluster
+foreach ($cl in $global:ONTAP_Clusters) {
+    $cluster = $cl.cluster
+    $sshHost     = if ($cl.FallbackIP) { $cl.FallbackIP } else { $cl.cluster }
+    $alias       = $cl.Alias
+    $csvPrefix   = $cl.CsvPrefix
+
+    # --- Connect function: <cluster> → Connect-NcController <cluster> ---
+    # Uses the cluster name (hostname) so Add-NcCredential lookups match by name.
+    # Only clusters that truly need IP (no DNS) should set cluster = FallbackIP in config.
+    $connectBody = [scriptblock]::Create("Connect-NcController '$cluster'")
+    Set-Item -Path "function:global:$cluster" -Value $connectBody
+
+    # --- SSH function: <cluster>-ssh (with <cluster>-s alias for convenience) ---
+    $sshFuncName = "$cluster-ssh"
+    $sshBody = [scriptblock]::Create(@"
+param([Parameter(Mandatory=`$false)][string]`$Command)
+if (`$Command) { ssh admin@$sshHost `$Command } else { ssh admin@$sshHost }
+"@)
+    Set-Item -Path "function:global:$sshFuncName" -Value $sshBody
+    # --- <cluster>-s short alias → the -ssh function (so both -ssh and -s resolve) ---
+    # NOTE: do NOT alias "$cluster-ssh" — that name is ALREADY the function above.
+    # $sshFuncName == "$cluster-ssh", so aliasing it to itself (<cluster>-ssh -> <cluster>-ssh)
+    # shadows the function and makes it un-invocable ("not recognized").
+    Set-Alias -Name "$cluster-s" -Value $sshFuncName -Scope Global -Force -ErrorAction SilentlyContinue
+
+    # --- Alias → connect function (if Alias is set and differs from cluster) ---
+    if ($alias -and $alias -ne $cluster) {
+        Set-Alias -Name $alias       -Value $cluster  -Scope Global -Force -ErrorAction SilentlyContinue
+        Set-Alias -Name "$alias-ssh" -Value $sshFuncName  -Scope Global -Force -ErrorAction SilentlyContinue
+        Set-Alias -Name "$alias-s"   -Value $sshFuncName  -Scope Global -Force -ErrorAction SilentlyContinue
+    }
+
+    # --- CSV wrapper: Get-<Alias>Csv ---
+    if ($csvPrefix) {
+        $csvFuncName = "Get-${csvPrefix}Csv"
+        $csvBody = [scriptblock]::Create(@"
+param([Parameter(Mandatory=`$true)][string]`$Command,[string[]]`$Headers)
+Invoke-OntapCsv -SshFunction '$sshFuncName' -Command `$Command -Headers `$Headers
+"@)
+        Set-Item -Path "function:global:$csvFuncName" -Value $csvBody
+    }
+}
+
+

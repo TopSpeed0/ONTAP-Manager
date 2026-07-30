@@ -1,0 +1,51 @@
+{
+  "_comment": "Template for the DFS cleanup / decommission workflow. Copy to Config_DFSCleanup.json and fill in real values. Read together with config.json (clusters, DFS_Config, Personal_modules).",
+  "DFSCleanup": {
+    "ClusterAlias": "<cluster-alias>",
+    "_comment_ClusterAlias": "Must match an entry in config.json ONTAP_Clusters (cluster or Alias). DFS namespace details (Vserver, CifsAlias, DfsShare, DfsPath) are read from config.json DFS_Config using this key.",
+    "RestHost": "<cluster>.<domain>.local",
+    "_comment_RestHost": "FQDN used for the ONTAP REST API calls (File System Analytics). Toolkit cmdlets connect via ClusterAlias instead.",
+    "CyberArk": {
+      "CCPAddress": "CCP-SERVER.DOMAIN.LOCAL",
+      "AppId": "APP-ID-FOR-CLUSTER",
+      "UserName": "SvcAccountName",
+      "CCPAddressAlternates": [
+        "CCP-SERVER-2.DOMAIN.LOCAL"
+      ]
+    },
+    "_comment_CyberArk": "Credentials for the REST/analytics calls are fetched from CyberArk CCP at runtime — nothing is stored on disk. The NetApp.ONTAP cmdlets authenticate separately via Connect-NcController / saved NC credentials.",
+    "AgeThresholds": {
+      "CandidateYears": 3,
+      "ImmediateYears": 7
+    },
+    "_comment_AgeThresholds": "CandidateYears: no new files and no access in this many years => flagged as a deletion candidate for approval. ImmediateYears: same test over a longer window => eligible for immediate deletion. Change these here, never in code.",
+    "RequirePerFileProofForImmediate": true,
+    "_comment_RequirePerFileProofForImmediate": "FSA histograms collapse their oldest bucket (e.g. '2022 or OLDER'), which can prove the 3-year rule but NOT the 7-year rule. When true, an IMMEDIATE verdict additionally requires real per-file accessed_time/modified_time timestamps from the REST files endpoint. Leave true unless you accept deleting on histogram evidence alone.",
+    "ProtectedVolumes": [
+      "<dfs-container-volume-1>",
+      "<dfs-container-volume-2>",
+      "<shared-data-volume-1>",
+      "<shared-data-volume-2>"
+    ],
+    "_comment_ProtectedVolumes": "Shared/protected volumes that must NEVER be deleted as a whole, even when the last qtree inside them is removed. A qtree or folder inside a protected volume can still be deleted. Mirrors the protected list in New-NcSymlinkShare.psm1. IMPORTANT: also list every DFS symlink-container volume — the volume whose root holds the widelink target files for a namespace. Those show ~0 GB used and a DFS path pointing at one (e.g. \\\\server\\dfs\\<link> where the share path is the volume root) resolves to a whole-volume delete that would destroy the entire namespace.",
+    "Excel": {
+      "SourcePath": "scripts/dfs-cleanup/DFS_CleanUP/Volumes or Qtree to Delete.xlsx",
+      "WorksheetName": "CAB1",
+      "PathColumn": "DFS to Delete",
+      "WriteMode": "Copy",
+      "OutputSuffix": " - updated",
+      "SharePath": "\\\\SERVER\\SHARE$\\path\\to\\Volumes or Qtree to Delete - updated.xlsx",
+      "SyncFromShare": true,
+      "PublishToShare": true,
+      "_comment_Excel": "SourcePath is the LOCAL master inside the workspace. SharePath is the copy the manager reads. Before reading, a newer SharePath is pulled down so rows the manager added are included; after writing, the result is published back. Both copies are backed up before being overwritten. No symlink: the workspace is inside OneDrive (reparse points become cloud placeholders, tag 0x9000601a) and creating a symlink to a UNC path is blocked by endpoint security. Set SharePath to null to work purely locally."
+    },
+    "_comment_Excel_write": "PathColumn is the header of the column holding the DFS UNC path; add a new path there and the next Report run fills the rest of that row in. -Mode Report updates that worksheet IN PLACE, cell by cell, and backs the file up to '<name>.bak-<stamp>.xlsx' first. It does not add a worksheet per run. WriteMode and OutputSuffix are legacy keys from the old copy-and-append behaviour and are no longer read.",
+    "SymlinkScanDepth": 1,
+    "SymlinkScanMaxUsedGB": 0,
+    "_comment_SymlinkScan": "How the DFS container-volume index is discovered. ONTAP records widelinks by a bare relative name and never says which volume holds the symlink FILE, so it must be scanned for. Depth 0 = volume roots only; 1+ also descends that many directory levels. MaxUsedGB 0 = scan every volume regardless of size; a cap means symlinks in larger volumes are missed (skipped volumes are always logged, never silently dropped). Discovery is name-agnostic on purpose — do not assume container volumes follow a naming convention.",
+    "FileScanMaxRecords": 5000,
+    "_comment_FileScanMaxRecords": "Page size for the per-file timestamp scan. The scan pages until exhausted or until the newest timestamp is established; raise only if a very large qtree needs deeper inspection.",
+    "ExportRoot": "scripts/dfs-cleanup/exports",
+    "LogRoot": "scripts/dfs-cleanup/logs"
+  }
+}

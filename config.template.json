@@ -1,0 +1,54 @@
+{
+  "_comment": "Copy this file to config.json and fill in your values. config.json is gitignored.",
+  "Docs_Port": 8080,
+  "NDMP_Config": {
+    "BackupUser": "backupuser",
+    "CredentialPrefix": "ndmp",
+    "SrcCluster": "",
+    "DstCluster": "",
+    "SRC": "",
+    "DST": ""
+  },
+  "ONTAP_ROUser": "",
+  "S3_Config": {
+    "_comment": "Per-cluster S3 settings. CredentialName is consumed by the Ansible S3 playbook. When it matches API_Cred, the standard admin user is reused. A different CredentialName means a dedicated dev/restricted user.",
+    "Clusters": {
+      "<cluster-alias>": {
+        "_comment": "Explain why this cluster uses this credential (admin reuse vs dedicated dev user).",
+        "Vserver": "<s3-svm-name>",
+        "S3User": "<s3-object-user>",
+        "OntapUsername": "admin",
+        "CredentialName": "<cred-file-name>",
+        "VaultFile": "credentials/<vault-file>.yml"
+      }
+    }
+  },
+  "DFS_Config": {
+    "<cluster-alias>": {
+      "Vserver": "<nas-svm-name>",
+      "CifsServer": "<cifs-netbios-name>",
+      "CifsAlias": "<netbios-alias>",
+      "DfsShare": "<dfs-share-name>",
+      "DfsPath": "/<dfs-junction-path>",
+      "Domain": "<ad-domain>"
+    }
+  },
+  "Personal_modules": [
+    "c:\\users\\<username>\\OneDrive\\modules1.psm1",
+    "c:\\users\\<username>\\OneDrive\\modules2.psm1"
+    ],
+  "ONTAP_Clusters": [
+    {
+      "cluster": "",
+      "Alias": "",
+      "Description": "",
+      "FallbackIP": "",
+      "VIP": false,
+      "NdmpPassword": "",
+      "SnapmirrorGroup": "",
+      "MainCluster": false,
+      "ONTAP_Select": false,
+      "API_Cred": "admin_<clustername>"
+    }
+  ]
+}
