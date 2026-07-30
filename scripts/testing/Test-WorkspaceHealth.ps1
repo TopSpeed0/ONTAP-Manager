@@ -187,7 +187,7 @@ $scriptsToValidate = @(
     @{ Name = 'Load-Config.ps1';                       Path = "$rootDir\Load-Config.ps1" }
     @{ Name = 'profile1.ps1';                          Path = "$rootDir\profile1.ps1" }
     @{ Name = 'Start-Docs.ps1';                        Path = "$rootDir\Start-Docs.ps1" }
-    @{ Name = 'Switch-Branch.ps1';                     Path = "$rootDir\Switch-Branch.ps1" }
+    @{ Name = 'Push-Both.ps1';                         Path = "$rootDir\Push-Both.ps1" }
     @{ Name = 'scripts\credentials\Get-Credential.ps1'; Path = "$rootDir\scripts\credentials\Get-Credential.ps1" }
     @{ Name = 'scripts\credentials\New-Credential.ps1'; Path = "$rootDir\scripts\credentials\New-Credential.ps1" }
     @{ Name = 'scripts\disk\sas-diag.ps1';             Path = "$rootDir\scripts\disk\sas-diag.ps1" }
