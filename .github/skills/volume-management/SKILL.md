@@ -1,0 +1,128 @@
+---
+name: volume-management
+description: 'Create, resize, move, and manage NetApp ONTAP volumes. Use when: creating volume, resizing volume, moving volume, volume offline, volume online, changing junction path, modifying volume attributes, tiering policy, snapshot policy, export policy, volume clone. Covers NAS and SAN volume operations.'
+argument-hint: 'Specify operation (create, resize, move) and volume details'
+---
+
+# Volume Management
+
+## When to Use
+- Creating new volumes on a cluster
+- Resizing, moving, or modifying existing volumes
+- Changing volume properties (junction path, export policy, snapshot policy, tiering)
+- Volume clone operations
+
+## Key Concepts (from ONTAP 9 docs)
+- Volumes must have a **junction path** for NAS access (e.g., `/data`, `/eng/home`)
+- **Thin provisioning** (`-space-guarantee none`): most common, doesn't pre-reserve aggregate space
+- **Thick provisioning** (`-space-guarantee volume`): reserves full space, use for SAN LUNs
+- **FlexVol**: max 100TB (300TB with large-size, ONTAP 9.12.1 P2+)
+- **FlexGroup**: up to 60PB across 200 member volumes, for massive namespaces
+- Security styles: `unix` (NFS), `ntfs` (SMB/Hyper-V/SQL), `mixed` (multi-protocol)
+- Do NOT place SAN LUNs and NAS shares on the same FlexVol volume
+- Tiering policies (FabricPool): `none`, `snapshot-only`, `auto`, `all`
+- For detailed reference, see [ONTAP 9 Volume Reference](./references/volume-ontap-reference.md)
+
+## Procedure
+
+### Step 0 — Gather Requirements
+Ask the user:
+1. **Cluster** (<cluster-name> or <cluster-name>)
+2. **SVM** (vserver) for the volume
+3. **Operation** (create, resize, move, etc.)
+4. For create: volume name, size, aggregate, protocol (NFS/CIFS/iSCSI), junction path
+
+### List Existing Volumes
+```powershell
+# Preferred — native NetApp.ONTAP cmdlet
+Get-NcVol -Vserver <svm>
+# Fallback — only if Get-NcVol is unavailable
+Get-<Prefix>Csv -Command "vol show -vserver <svm> -fields volume,size,used,percent-used,aggregate,state,junction-path,type"
+```
+
+### Create a Volume
+```powershell
+# NAS volume with junction path
+<cluster-ssh> -Command "vol create -vserver <svm> -volume <vol_name> -aggregate <aggr> -size <size> -junction-path /<path> -security-style unix -space-guarantee none"
+
+# SAN volume (no junction path)
+<cluster-ssh> -Command "vol create -vserver <svm> -volume <vol_name> -aggregate <aggr> -size <size> -space-guarantee none"
+```
+
+### Resize a Volume
+```powershell
+<cluster-ssh> -Command "vol size -vserver <svm> -volume <vol_name> -new-size <size>"
+```
+
+### SAN LUN Volume Space Management (autosize off → use snapshot autodelete)
+When a LUN-hosting volume has **autosize disabled** (you don't want the volume to grow) but still keeps snapshots, enable **snapshot autodelete** so a filling volume purges old snapshots instead of taking the LUN offline (volume-full = write failure = LUN offline).
+
+```powershell
+# Enable autodelete: purge oldest snapshots when the volume passes ~80% full
+<cluster-ssh> -Command "vol snapshot autodelete modify -vserver <svm> -volume <vol> -enabled true -commitment try -trigger volume -target-free-space 20% -delete-order oldest_first"
+
+# Make snapshot deletion the first space-management action (since autosize is off)
+<cluster-ssh> -Command "vol modify -vserver <svm> -volume <vol> -space-mgmt-try-first snap_delete"
+
+# Verify
+<cluster-ssh> -Command "vol snapshot autodelete show -vserver <svm> -fields volume,enabled,commitment,trigger,target-free-space,delete-order"
+```
+
+Notes:
+- `commitment try` keeps snapshots locked by SnapMirror/clones — safe for replicated volumes, but a volume backed only by locked snapshots can still fill. Use `disrupt`/`destroy` only when you accept breaking those locks.
+- `trigger volume` fires on volume fullness; `target-free-space 20%` is the reclaim goal.
+- Leave the SVM **root volume** out of bulk autodelete changes — it hosts no LUNs.
+- Pair this with volume sizing headroom; autodelete is the safety net, not the primary sizing strategy.
+
+### Move a Volume
+```powershell
+# Start volume move
+<cluster-ssh> -Command "vol move start -vserver <svm> -volume <vol_name> -destination-aggregate <dest-aggr>"
+
+# Check move status
+# Preferred — native cmdlet
+Get-NcVolMove
+# Fallback — only if Get-NcVolMove is unavailable
+Get-<Prefix>Csv -Command "vol move show -fields volume,vserver,state,phase,percent-complete"
+```
+
+### Modify Volume Properties
+```powershell
+# Change junction path
+<cluster-ssh> -Command "vol mount -vserver <svm> -volume <vol_name> -junction-path /<new-path>"
+
+# Change export policy
+<cluster-ssh> -Command "vol modify -vserver <svm> -volume <vol_name> -policy <export-policy-name>"
+
+# Change snapshot policy
+<cluster-ssh> -Command "vol modify -vserver <svm> -volume <vol_name> -snapshot-policy <policy-name>"
+
+# Change tiering policy
+<cluster-ssh> -Command "vol modify -vserver <svm> -volume <vol_name> -tiering-policy auto"
+
+# Set autosize
+<cluster-ssh> -Command "vol autosize -vserver <svm> -volume <vol_name> -mode grow_shrink -maximum-size <max> -grow-threshold-percent 85 -shrink-threshold-percent 50"
+```
+
+### Volume Clone
+```powershell
+<cluster-ssh> -Command "vol clone create -vserver <svm> -flexclone <clone_name> -parent-volume <parent_vol>"
+```
+
+### Delete a Volume
+**WARNING:** Confirm with user before running.
+```powershell
+# Unmount first
+<cluster-ssh> -Command "vol unmount -vserver <svm> -volume <vol_name>"
+
+# Take offline
+<cluster-ssh> -Command "vol offline -vserver <svm> -volume <vol_name>"
+
+# Destroy
+<cluster-ssh> -Command "vol destroy -vserver <svm> -volume <vol_name>"
+```
+
+## Safety
+- Always confirm `vol offline` and `vol destroy` with the user
+- Verify the correct SVM and volume name before destructive operations
+- Check if the volume has SnapMirror relationships before deleting

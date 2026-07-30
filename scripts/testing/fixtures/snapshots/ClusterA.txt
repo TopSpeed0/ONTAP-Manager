@@ -1,0 +1,20 @@
+
+
+Last login time: 7/30/2026 17:47:03
+
+
+  (rows)
+
+vserver','volume','snapshot','create-time','busy','owners','size','snapmirror-label','state','
+Vserver','Volume','Snapshot','Creation Time','Snapshot Busy','List of Owners','Snapshot Size','Label for SnapMirror Operations','Snapshot State','
+svm_alpha','vol0','nightly.1','"Wed Jul 29 00:00:18 2026"','false','-','2.26GB','-','-','
+svm_alpha','vol0','hourly.0','"Thu Jul 30 16:00:51 2026"','false','-','17.04MB','-','-','
+svm_alpha','archive1','yearly.2019','"Sun Dec  1 02:00:00 2019"','false','-','870.5GB','-','-','
+svm_alpha','archive1','clone_base.2026-03-16','"Mon Mar 16 13:15:37 2026"','true','"volume clone"','5.48GB','-','-','
+svm_alpha','bigdata','weekly.2025-01','"Wed Jan  1 03:15:00 2025"','false','-','1.75TB','-','-','
+svm_alpha','bigdata','snapshot_for_backup.674','"Thu Jul 30 00:11:07 2026"','true','dump','349.3MB','-','-','
+svm_alpha','vsroot','vserverdr.0.ee87a7e5-7db9-11f0-8a7c-00a098a9c7c3.2026-07-30_170500','"Thu Jul 30 17:05:30 2026"','false','-','148KB','sm_created','-','
+svm_alpha','oddvol','no_size_snap','"Fri Feb 14 10:00:00 2025"','false','-','-','-','-','
+svm_alpha','oddvol','no_date_snap','-','false','-','12.5MB','-','-','
+svm_alpha','oddvol','truncated_row','"Fri Feb 14 10:00:00 2025"','false','-','
+9 entries were displayed.

@@ -1,0 +1,11 @@
+Last login time: 7/30/2026 17:50:00
+
+
+  (rows)
+
+vserver','volume','snapshot','size','create-time','state','busy','snapmirror-label','owners','
+Vserver','Volume','Snapshot','Snapshot Size','Creation Time','Snapshot State','Snapshot Busy','Label for SnapMirror Operations','List of Owners','
+svm_beta','db_vol','daily.2026-07-25','412.8GB','"Sat Jul 25 02:00:00 2026"','-','false','daily','-','
+svm_beta','db_vol','ancient.2018','2.10TB','"Mon Jan  1 00:00:00 2018"','-','false','-','-','
+svm_beta','logs','hourly.3','88KB','"Thu Jul 30 14:00:00 2026"','-','false','-','-','
+3 entries were displayed.

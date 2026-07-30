@@ -1,0 +1,87 @@
+# Python virtual environment (used for PDF extraction tools)
+.venv/
+
+# Local config with real cluster names, IPs, paths (template is tracked)
+config.json
+Config_shareMig.json
+Config_DFSCleanup.json
+PROJECT-DIGEST.md
+
+# DFS cleanup output — reports name real shares/volumes, logs may contain paths
+scripts/dfs-cleanup/exports/
+scripts/dfs-cleanup/logs/
+
+# Local workbook master + its backups (real share/volume inventory, and the manager's own edits)
+scripts/dfs-cleanup/DFS_CleanUP/
+
+# Session state: the current inventory, per-row findings and open decisions. Same reason as
+# .github/session-log*.md — specific by design, so it is kept locally and not pushed.
+scripts/dfs-cleanup/HANDOFF.md
+
+# Personal cheat sheet — deliberately carries REAL namespace paths, cluster and account names so
+# the blocks are copy-paste ready. That is exactly why it stays local. README.md is the tracked,
+# placeholder version of the same material.
+scripts/dfs-cleanup/Script-4-Human.ps1
+
+# Cross-workspace helpers — retained in the private mirror because they depend on local skill
+# workspaces and credentials outside this repository.
+scripts/dfs-cleanup/Test-NaCyberArkAuth.ps1
+scripts/Install-AgentSkillLinks.ps1
+
+# Generated HTML (loads from config.json — not for git)
+*.html
+# Exception: docs hub SPA is tracked (cluster data injected at runtime from config.json)
+!docs/index.html
+
+# PDF files are large — track separately or exclude from git
+PDF/*.pdf
+
+# MCP config contains sensitive credentials (Telegram session string, API keys)
+.vscode/mcp.json
+
+# Ansible Vault encrypted credential files (keep vault_template.yml tracked)
+credentials/vault_credentials*.yml
+
+# Site-specific Ansible playbooks (contain real hostnames/IPs — generic version is tracked)
+ansible/s3-bucket-provision/provision_s3_bucket.yml
+ansible/s3-bucket-provision/provision_s3_bucket_admin.yml
+ansible/s3-bucket-provision/provision_s3_bucket_dev.yml
+ansible/s3-bucket-provision/README_nexyte.md
+ansible/s3-bucket-provision/_provision_vars.json
+ansible/s3-bucket-provision/_vault_pass.tmp
+
+# Credential store — only scripts are tracked, not keys or encrypted files
+credentials/aes.key
+credentials/*.cred
+credentials/credentials.json
+
+# IDE settings
+.vscode/
+
+# Claude local settings
+.claude/
+
+# Debug harness output (transcripts, logs)
+debug/
+
+# Site-specific DR reports (too coupled to local cluster topology)
+scripts/reports/Get-NI-DR-Report*.ps1
+
+# Personal NetApp support cases (raw, contain customer name + internal links)
+.github/Netapp Cases/
+
+# Session logs (personal working notes)
+.github/session-log*.md
+
+# Generated CSV reports (contain real cluster/volume data)
+*.csv
+
+# Snapshot comparison output — raw SSH captures and the JSON record set both carry real
+# cluster / SVM / volume / snapshot names, so the whole output tree stays local. This also
+# covers the offline-fixture replay report, which is regenerated on demand (see the
+# Snapshot Comparison section of README.MD).
+scripts/snapshots/reports/
+
+# Old quota report (superseded by Clusters Quota Policy Manger.ps1)
+scripts/quota/Clusters Quota Reports (old).ps1
+Get-NI-DR-Report*.ps1
