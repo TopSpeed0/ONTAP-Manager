@@ -1,37 +1,42 @@
 <#
 .SYNOPSIS
-    Manage the unified public-clean publishing branch.
+    Publish the sanitized snapshot branch to both remotes.
 .EXAMPLE
-    .\Switch-Branch.ps1           # Show current branch
-    .\Switch-Branch.ps1 public    # Switch to public-clean
-    .\Switch-Branch.ps1 publish   # Push public-clean to GitHub main, then Bitbucket public-clean
+    .\Switch-Branch.ps1           # Show current branch and the publish mapping
+    .\Switch-Branch.ps1 public    # Switch to the publish branch (public-clean)
+    .\Switch-Branch.ps1 publish   # Push to GitHub main AND Bitbucket snapshot-sanitized
 .NOTES
-    public-clean is the single publish branch. The GitHub remote publishes it as main;
-    the Bitbucket remote publishes it as public-clean. The legacy master branch is retained
-    only for historical/local work and is never selected automatically.
+    public-clean is the local publish branch. It holds the sanitized snapshot and is
+    published under a different name on each remote:
+
+        public-clean -> public/main                 (GitHub, public)
+        public-clean -> origin/snapshot-sanitized   (Bitbucket, private)
+
+    Two other Bitbucket branches are NOT published to and must not be overwritten:
+        origin/private-history  - the real-names full history (only copy)
+        origin/master           - old pre-DFS history, kept for reference
 #>
 param(
-    [ValidateSet('public','bitbucket','publish','status')]
+    [ValidateSet('public','publish','status')]
     [string]$Target = 'status'
 )
 
+$publishBranch = 'public-clean'
 $current = git branch --show-current
 
 if ($Target -eq 'status') {
-    $label = switch ($current) {
-        'public-clean' { 'PUBLIC (GitHub)' }
-        'master'       { 'BITBUCKET (master)' }
-        default        { $current }
-    }
-    Write-Host "Branch : $current  [$label]" -ForegroundColor Cyan
+    Write-Host "Branch : $current" -ForegroundColor Cyan
     git log --oneline -3
-    Write-Host "Publish mapping: public-clean -> public/main -> origin/public-clean" -ForegroundColor DarkGray
+    Write-Host ""
+    Write-Host "Publish mapping:" -ForegroundColor DarkGray
+    Write-Host "  $publishBranch -> public/main               (GitHub)"    -ForegroundColor DarkGray
+    Write-Host "  $publishBranch -> origin/snapshot-sanitized (Bitbucket)" -ForegroundColor DarkGray
     return
 }
 
 if ($Target -eq 'publish') {
-    if ($current -ne 'public-clean') {
-        throw "Publish only from public-clean. Current branch: $current"
+    if ($current -ne $publishBranch) {
+        throw "Publish only from $publishBranch. Current branch: $current"
     }
     if (git status --porcelain) {
         throw "Working tree is not clean. Commit or discard tracked changes before publishing."
@@ -40,25 +45,26 @@ if ($Target -eq 'publish') {
     Write-Host "Fetching publish remotes..." -ForegroundColor Cyan
     git fetch --prune public
     git fetch --prune origin
-    Write-Host "Pushing public-clean to GitHub public/main..." -ForegroundColor Cyan
-    git push public 'public-clean:main'
-    Write-Host "Pushing public-clean to Bitbucket origin/public-clean..." -ForegroundColor Cyan
-    git push origin 'public-clean:public-clean'
-    Write-Host "Published successfully to both remotes." -ForegroundColor Green
+
+    Write-Host "Pushing to GitHub public/main..." -ForegroundColor Cyan
+    git push public "${publishBranch}:main"
+    if ($LASTEXITCODE -ne 0) { throw "GitHub push failed - stopping before the Bitbucket push." }
+
+    Write-Host "Pushing to Bitbucket origin/snapshot-sanitized..." -ForegroundColor Cyan
+    git push origin "${publishBranch}:snapshot-sanitized"
+    if ($LASTEXITCODE -ne 0) { throw "Bitbucket push failed. GitHub is already updated." }
+
+    Write-Host "Published to both remotes." -ForegroundColor Green
     return
 }
 
-$targetBranch = switch ($Target) {
-    'public'    { 'public-clean' }
-    'bitbucket' { 'master' } # legacy compatibility only; publishing still requires public-clean
-}
-
-if ($current -eq $targetBranch) {
-    Write-Host "Already on $targetBranch" -ForegroundColor Yellow
+# $Target -eq 'public'
+if ($current -eq $publishBranch) {
+    Write-Host "Already on $publishBranch" -ForegroundColor Yellow
     return
 }
 
-Write-Host "Switching from $current -> $targetBranch ..." -ForegroundColor Cyan
-git checkout $targetBranch
+Write-Host "Switching from $current -> $publishBranch ..." -ForegroundColor Cyan
+git checkout $publishBranch
 Write-Host ""
 git log --oneline -3
