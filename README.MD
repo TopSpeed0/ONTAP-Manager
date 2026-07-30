@@ -108,7 +108,7 @@ SKILL.md                   # Project-owned workspace skill index (Claude/Hermes 
 CLAUDE.md                  # Claude-specific entry layer; links to the workspace skill tree
 Load-Config.ps1              # Central config loader — auto-generates functions
 Start-Docs.ps1               # One-liner: Python check + docs server + config load
-Switch-Branch.ps1            # public-clean status/switch/publish helper
+Switch-Branch.ps1            # Publish helper — pushes public-clean to GitHub main + Bitbucket snapshot-sanitized
 profile1.ps1                 # Workspace profile — modules + dot-sources Load-Config
 .github/
   agents/                    # Custom Copilot agents (@sanitizer, etc.)
