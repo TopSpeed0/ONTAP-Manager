@@ -1741,6 +1741,16 @@ function Confirm-DFSDeletion {
         return $false
     }
 
+    # -Mode Delete does not run Add-DFSAnalysis — the evidence came from the earlier Report run,
+    # not from now — so a row legitimately arrives here without the analysis fields. Under
+    # StrictMode, reading one directly is a terminating error, and a line that only prints
+    # context must never be the thing that kills a confirmed deletion.
+    $show = {
+        param($name, $fallback)
+        if (($Row.PSObject.Properties.Name -contains $name) -and
+            -not [string]::IsNullOrWhiteSpace([string]$Row.$name)) { $Row.$name } else { $fallback }
+    }
+
     $target = $Row.DfsPath
     $storage = if ($IncludeBackingStorage) {
         "$($Row.DeleteMethod) '$($Row.DeleteRelPath)' on volume '$($Row.Volume)'"
@@ -1756,7 +1766,7 @@ function Confirm-DFSDeletion {
     Write-Host "   Widelink       : $($Row.UnixPath)"
     Write-Host "   Symlink file   : $($Row.SymlinkFilePath)"
     Write-Host "   Backing storage: $storage" -ForegroundColor $(if ($IncludeBackingStorage) { 'Red' } else { 'Yellow' })
-    Write-Host "   Verdict        : $($Row.Verdict)   Content: $($Row.ContentMeasured)"
+    Write-Host "   Verdict        : $(& $show 'Verdict' 'n/a (not analysed this run)')   Content: $(& $show 'ContentMeasured' 'not measured')"
     if ([int]$Row.WidelinkCount -gt 1) {
         Write-Host "   NOTE: share is reached by $($Row.WidelinkCount) widelinks — the share will be PRESERVED." -ForegroundColor Yellow
     }
@@ -1886,6 +1896,21 @@ function Remove-DFSTarget {
         if ($Row.SymlinkFileCount -and [int]$Row.SymlinkFileCount -gt 1) {
             Write-DFSLog "  $($Row.SymlinkFileCount) symlink files route to this one widelink — all will be removed: $($Row.SymlinkFilePath)" 'WARN'
         }
+        # SSH goes to the CLUSTER management name, not to a node. Node names such as
+        # 'a1k-prd-01' are cluster-internal and generally do not resolve in DNS — connecting to
+        # one produced 'No such host is known' and left the file behind. ClusterAlias is the same
+        # name Connect-NcController already used successfully, so it is known to resolve.
+        #
+        # The node is then named explicitly in 'run -node <node>'. Nodeshell 'rm' only works on
+        # the node that HOSTS the volume; every other node answers 'Volume is not known or has
+        # been moved'. A FlexVol lives in exactly one aggregate and an aggregate is owned by
+        # exactly one node, so the aggregate identifies the host precisely — no fan-out, no
+        # per-node noise to read past. '-node *' is kept only as a fallback for the narrow case
+        # where the volume moved between this lookup and the command.
+        #
+        # Success is VERIFIED with 'ls' rather than inferred from rm's silence: a successful
+        # nodeshell rm prints nothing, and so does a command that never reached the right node.
+        $sshTarget = $Cfg.ClusterAlias
         foreach ($sp in @($Row.SymlinkFilePath -split ' ; ')) {
             $rel = $sp.Trim().TrimStart('/')
             $containerVol = ($rel -split '/')[0]
@@ -1894,16 +1919,54 @@ function Remove-DFSTarget {
                 Write-DFSLog "  Container volume '$containerVol' not found — skipping symlink file cleanup." 'WARN'
                 continue
             }
-            $node = (Get-NcAggr $containerObj.Aggregate).Nodes | Select-Object -First 1
-            $sshCommand = 'priv set diag; rm /vol/{0}' -f $rel
-            if ($PSCmdlet.ShouldProcess("Node '$node' file '/vol/$rel'", 'Remove leftover symlink file via SSH')) {
+
+            # VolumeIdAttributes.Node is not populated by the ZAPI unless explicitly requested,
+            # so the owning node comes from the aggregate the volume sits in.
+            $owner = @((Get-NcAggr $containerObj.Aggregate -ErrorAction SilentlyContinue).Nodes) |
+                     Where-Object { $_ } | Select-Object -First 1
+            if (-not $owner) {
+                Write-DFSLog "  Could not determine which node hosts volume '$containerVol' — falling back to all nodes." 'WARN'
+                $owner = '*'
+            }
+
+            $nodeshell = { param($verb, $node) 'run -node {0} -command "priv set diag; {1} /vol/{2}"' -f $node, $verb, $rel }
+            $readOut = {
+                param($resp)
+                (@($resp) | ForEach-Object {
+                    if ($null -eq $_) { '' }
+                    elseif ($_.PSObject.Properties.Name -contains 'Value') { [string]$_.Value }
+                    else { [string]$_ }
+                }) -join "`n"
+            }
+
+            if ($PSCmdlet.ShouldProcess("Node '$owner' file '/vol/$rel' (via cluster '$sshTarget')", 'Remove leftover symlink file via nodeshell rm')) {
                 try {
-                    $invoke = Invoke-NcSsh -ControllerName $node -Command $sshCommand -Credential $NcCredential -ErrorAction Stop
-                    if ($invoke.Value -match 'No such file or directory') {
-                        Write-DFSLog "  Symlink file '/vol/$rel' was already gone." 'WARN'
+                    $null  = Invoke-NcSsh -Name $sshTarget -Command (& $nodeshell 'rm' $owner) -Credential $NcCredential -ErrorAction Stop
+                    $after = & $readOut (Invoke-NcSsh -Name $sshTarget -Command (& $nodeshell 'ls' $owner) -Credential $NcCredential -ErrorAction Stop)
+
+                    # 'Volume is not known' back from the node we deliberately targeted means the
+                    # volume moved after the aggregate lookup. That is the one case the fan-out
+                    # handles better, so retry once across all nodes rather than fail.
+                    if ($owner -ne '*' -and $after -match 'Volume is not known') {
+                        Write-DFSLog "  Volume '$containerVol' is no longer on '$owner' — retrying across all nodes." 'WARN'
+                        $null  = Invoke-NcSsh -Name $sshTarget -Command (& $nodeshell 'rm' '*') -Credential $NcCredential -ErrorAction Stop
+                        $after = & $readOut (Invoke-NcSsh -Name $sshTarget -Command (& $nodeshell 'ls' '*') -Credential $NcCredential -ErrorAction Stop)
+                    }
+
+                    # Only the node that owns the volume can answer 'No such file or directory',
+                    # so that string is positive proof the file is gone. Absence of the name is
+                    # NOT proof — the path is echoed back inside every error line, so a reply that
+                    # never reached the volume would otherwise read as a clean success.
+                    if ($after -match 'No such file or directory') {
+                        Write-DFSLog "  Removed leftover symlink file '/vol/$rel' (verified gone on '$owner')." 'OK'
+                    }
+                    elseif ($after -match 'Volume is not known') {
+                        Write-DFSLog ("  Ran rm for '/vol/$rel' but COULD NOT VERIFY — no node reported owning volume " +
+                                      "'$containerVol'. Check by hand: run -node * -command `"priv set diag; ls /vol/$rel`"") 'WARN'
                     }
                     else {
-                        Write-DFSLog "  Removed leftover symlink file '/vol/$rel'." 'OK'
+                        Write-DFSLog ("  Symlink file '/vol/$rel' is STILL PRESENT after rm — needs manual cleanup. " +
+                                      "Nodeshell said: $($after -replace '\s+', ' ')") 'WARN'
                     }
                 }
                 catch {
@@ -2253,6 +2316,19 @@ switch ($Mode) {
                 else {
                     Test-DeletionAllowed -Cfg $cfg -Row $row -Approved $ApprovedVerdicts -VerdictMap $verdictMap
                 }
+
+                # Delete mode gathers no evidence of its own. Carry the verdict that was actually
+                # approved onto the row, so the confirmation screen and the run's output CSV say
+                # what this deletion was justified by instead of leaving the field absent.
+                $stored = if (-not $isForced -and $check.Allowed) { $check['Stored'] } else { $null }
+                $row | Add-Member -NotePropertyName 'Verdict' -NotePropertyValue $(
+                    if     ($isForced) { 'FORCED (a person''s authority, no age evidence)' }
+                    elseif ($stored)   { $stored.Verdict }
+                    else               { 'n/a (not analysed this run)' }) -Force
+                $row | Add-Member -NotePropertyName 'ContentMeasured' -NotePropertyValue $(
+                    if ($stored -and ($stored.PSObject.Properties.Name -contains 'ContentMeasured')) {
+                        $stored.ContentMeasured
+                    } else { 'not measured this run' }) -Force
 
                 if (-not $check.Allowed) {
                     Write-DFSLog "  REFUSED: $($check.Reason)" 'ERROR'
