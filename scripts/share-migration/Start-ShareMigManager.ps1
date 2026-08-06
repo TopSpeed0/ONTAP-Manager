@@ -22,7 +22,8 @@
 #>
 [CmdletBinding()]
 param(
-    [string]$Path
+    [string]$Path,
+    [switch]$HideConsole
 )
 
 $ErrorActionPreference = 'Stop'
@@ -30,6 +31,17 @@ Add-Type -AssemblyName PresentationFramework
 Add-Type -AssemblyName PresentationCore
 Add-Type -AssemblyName WindowsBase
 Add-Type -AssemblyName System.Windows.Forms
+
+# Give the WPF window its own taskbar identity so it does not inherit the pwsh.exe icon.
+Add-Type -Namespace ShareMig -Name NativeUi -MemberDefinition @'
+[System.Runtime.InteropServices.DllImport("shell32.dll", SetLastError=true)]
+public static extern int SetCurrentProcessExplicitAppUserModelID(string AppID);
+[System.Runtime.InteropServices.DllImport("kernel32.dll")]
+public static extern System.IntPtr GetConsoleWindow();
+[System.Runtime.InteropServices.DllImport("user32.dll")]
+public static extern bool ShowWindow(System.IntPtr hWnd, int nCmdShow);
+'@ -ErrorAction SilentlyContinue
+try { [ShareMig.NativeUi]::SetCurrentProcessExplicitAppUserModelID('Cognyte.ShareMigrationManager') | Out-Null } catch { }
 
 $workspaceRoot = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 
@@ -58,30 +70,204 @@ if (Test-Path $configPath) {
 <Window xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="Share Migration Manager" Height="750" Width="900"
-        WindowStartupLocation="CenterScreen" ResizeMode="CanResize">
+    MinHeight="500" MinWidth="720" WindowStartupLocation="CenterScreen"
+    WindowStyle="None" AllowsTransparency="True" Background="Transparent" ResizeMode="CanResizeWithGrip">
     <Window.Resources>
         <Style TargetType="Label">
             <Setter Property="Margin" Value="2"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiFormTextBrush}"/>
         </Style>
         <Style TargetType="TextBox">
             <Setter Property="Margin" Value="2"/>
-            <Setter Property="Padding" Value="3"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="6,4"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Background" Value="{DynamicResource UiInputBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiInputTextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource UiBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="7">
+                            <ScrollViewer x:Name="PART_ContentHost" Margin="{TemplateBinding Padding}" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource UiAccentBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
         </Style>
         <Style TargetType="ComboBox">
             <Setter Property="Margin" Value="2"/>
-            <Setter Property="Padding" Value="3"/>
-            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Padding" Value="6,3"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+            <Setter Property="Background" Value="{DynamicResource UiInputBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiInputTextBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource UiBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
         </Style>
         <Style TargetType="CheckBox">
             <Setter Property="Margin" Value="4"/>
             <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiFormTextBrush}"/>
+        </Style>
+        <Style x:Key="ModernButton" TargetType="Button">
+            <Setter Property="Margin" Value="2"/>
+            <Setter Property="Padding" Value="10,5"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiTextBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource UiSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource UiBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="1"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="{TemplateBinding BorderThickness}" CornerRadius="8" Padding="{TemplateBinding Padding}" SnapsToDevicePixels="True">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource UiHoverBrush}"/>
+                                <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource UiAccentBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.8"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.4"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="Button" BasedOn="{StaticResource ModernButton}"/>
+        <Style x:Key="TitleBarButton" TargetType="Button">
+            <Setter Property="Margin" Value="0"/>
+            <Setter Property="Padding" Value="0"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiTextBrush}"/>
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="FontSize" Value="15"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource UiHoverBrush}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="CloseButton" TargetType="Button" BasedOn="{StaticResource TitleBarButton}">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#E81123"/>
+                                <Setter Property="Foreground" Value="White"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style TargetType="TabItem">
+            <Setter Property="Foreground" Value="{DynamicResource UiTextBrush}"/>
+            <Setter Property="Background" Value="{DynamicResource UiSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource UiBorderBrush}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TabItem">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}" BorderBrush="{TemplateBinding BorderBrush}" BorderThickness="1,1,1,0" CornerRadius="8,8,0,0" Margin="2,0,0,0" Padding="12,6">
+                            <ContentPresenter ContentSource="Header" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource UiHoverBrush}"/>
+                            </Trigger>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{DynamicResource UiSelectedTabBrush}"/>
+                                <Setter Property="Foreground" Value="{DynamicResource UiSelectedTabTextBrush}"/>
+                                <Setter Property="TextElement.Foreground" Value="{DynamicResource UiSelectedTabTextBrush}"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="SectionHeading" TargetType="TextBlock">
+            <Setter Property="Foreground" Value="{DynamicResource UiSectionHeadingBrush}"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+        </Style>
+        <Style TargetType="DataGrid">
+            <Setter Property="Background" Value="{DynamicResource UiFormBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiFormTextBrush}"/>
+            <Setter Property="RowBackground" Value="{DynamicResource UiFormBrush}"/>
+            <Setter Property="AlternatingRowBackground" Value="{DynamicResource UiSurfaceBrush}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource UiBorderBrush}"/>
+            <Setter Property="HorizontalGridLinesBrush" Value="{DynamicResource UiBorderBrush}"/>
+            <Setter Property="VerticalGridLinesBrush" Value="{DynamicResource UiBorderBrush}"/>
+            <Setter Property="RowHeaderWidth" Value="0"/>
+        </Style>
+        <Style TargetType="DataGridColumnHeader">
+            <Setter Property="Background" Value="{DynamicResource UiTitleBarBrush}"/>
+            <Setter Property="Foreground" Value="{DynamicResource UiTextBrush}"/>
+            <Setter Property="Padding" Value="8,5"/>
+            <Setter Property="FontWeight" Value="SemiBold"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource UiBorderBrush}"/>
+            <Setter Property="BorderThickness" Value="0,0,1,1"/>
+        </Style>
+        <Style TargetType="DataGridCell">
+            <Setter Property="Foreground" Value="{DynamicResource UiFormTextBrush}"/>
+            <Setter Property="BorderBrush" Value="Transparent"/>
+            <Style.Triggers>
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="{DynamicResource UiSelectedTabBrush}"/>
+                    <Setter Property="Foreground" Value="{DynamicResource UiSelectedTabTextBrush}"/>
+                </Trigger>
+            </Style.Triggers>
         </Style>
     </Window.Resources>
-    <DockPanel>
+    <Border Name="appFrame" Margin="12" Background="{DynamicResource UiWindowBrush}" BorderBrush="{DynamicResource UiBorderBrush}" BorderThickness="1" CornerRadius="12">
+        <Border.Effect>
+            <DropShadowEffect BlurRadius="22" Color="Black" Opacity="0.45" ShadowDepth="3"/>
+        </Border.Effect>
+    <Grid Name="rootGrid">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="42"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+        <Border Grid.Row="0" Name="titleBar" Background="{DynamicResource UiTitleBarBrush}" CornerRadius="11,11,0,0">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="16,0,0,0">
+                    <TextBlock Text="&#x26A1;" Foreground="{DynamicResource UiSectionHeadingBrush}" FontSize="14" VerticalAlignment="Center" Margin="0,0,8,0"/>
+                    <TextBlock Text="Share Migration Manager" Foreground="{DynamicResource UiTextBrush}" FontWeight="SemiBold" VerticalAlignment="Center"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Name="btnMinimize" Content="&#x2013;" Width="44" Height="42" Style="{StaticResource TitleBarButton}" ToolTip="Minimize"/>
+                    <Button Name="btnMaximize" Content="&#x25A1;" Width="44" Height="42" Style="{StaticResource TitleBarButton}" ToolTip="Maximize"/>
+                    <Button Name="btnClose" Content="&#x2715;" Width="44" Height="42" Style="{StaticResource CloseButton}" ToolTip="Close"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+    <DockPanel Grid.Row="1" Margin="4,0,4,4">
         <!-- Toolbar -->
-        <ToolBar DockPanel.Dock="Top">
+        <ToolBar DockPanel.Dock="Top" Background="Transparent" Foreground="{DynamicResource UiTextBrush}">
             <Button Name="btnLoad" Content="📂 Load" Padding="8,4" Margin="2"/>
             <Button Name="btnSave" Content="💾 Save" Padding="8,4" Margin="2"/>
             <Button Name="btnSaveAs" Content="💾 Save As..." Padding="8,4" Margin="2"/>
@@ -91,16 +277,25 @@ if (Test-Path $configPath) {
             <Button Name="btnNewCred" Content="🔑 New Credential" Padding="8,4" Margin="2"/>
             <Button Name="btnSetCred" Content="🔑 Set Password" Padding="8,4" Margin="2" ToolTip="Update password for an existing credential"/>
             <Separator/>
+            <TextBlock Text="Theme:" VerticalAlignment="Center" Margin="6,0,2,0"/>
+            <ComboBox Name="cmbTheme" Width="90" SelectedIndex="0">
+                <ComboBoxItem Content="Dark"/>
+                <ComboBoxItem Content="Light"/>
+                <ComboBoxItem Content="Vivid"/>
+            </ComboBox>
+            <Button Name="btnAccentColor" Content="Accent" Padding="6,3" Margin="2" ToolTip="Choose accent color"/>
+            <Button Name="btnConsoleColor" Content="Console" Padding="6,3" Margin="2" ToolTip="Choose console background color"/>
+            <Separator/>
             <TextBlock Name="txtFilePath" VerticalAlignment="Center" Margin="8,0" Foreground="Gray" FontSize="11"/>
         </ToolBar>
         
         <!-- Status bar -->
-        <StatusBar DockPanel.Dock="Bottom">
+        <StatusBar DockPanel.Dock="Bottom" Background="Transparent" Foreground="{DynamicResource UiMutedBrush}">
             <TextBlock Name="txtStatus" Text="Ready"/>
         </StatusBar>
         
         <!-- Main content -->
-        <TabControl Margin="5">
+        <TabControl Margin="5" Background="{DynamicResource UiFormBrush}" Foreground="{DynamicResource UiFormTextBrush}">
             <!-- Domain Settings Tab -->
             <TabItem Header="Domain Settings">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10">
@@ -128,7 +323,7 @@ if (Test-Path $configPath) {
                         </Grid.RowDefinitions>
                         
                         <!-- Source -->
-                        <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Source Domain" FontWeight="Bold" FontSize="14" Margin="0,5,0,5"/>
+                        <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Source Domain" Style="{StaticResource SectionHeading}" FontSize="14" Margin="0,5,0,5"/>
                         <Label Grid.Row="1" Grid.Column="0" Content="Domain (FQDN)"/>
                         <TextBox Grid.Row="1" Grid.Column="1" Name="txtSrcDomain"/>
                         <Label Grid.Row="2" Grid.Column="0" Content="Domain Controller(s)"/>
@@ -143,7 +338,7 @@ if (Test-Path $configPath) {
                         <TextBox Grid.Row="6" Grid.Column="1" Name="txtSrcDnsDomains" ToolTip="Comma-separated domain suffixes (e.g. source.example.invalid)"/>
                         
                         <!-- Destination -->
-                        <TextBlock Grid.Row="8" Grid.ColumnSpan="2" Text="Destination Domain" FontWeight="Bold" FontSize="14" Margin="0,5,0,5"/>
+                        <TextBlock Grid.Row="8" Grid.ColumnSpan="2" Text="Destination Domain" Style="{StaticResource SectionHeading}" FontSize="14" Margin="0,5,0,5"/>
                         <Label Grid.Row="9" Grid.Column="0" Content="Domain (FQDN)"/>
                         <TextBox Grid.Row="9" Grid.Column="1" Name="txtDestDomain"/>
                         <Label Grid.Row="10" Grid.Column="0" Content="Domain Controller"/>
@@ -182,7 +377,7 @@ if (Test-Path $configPath) {
                             <RowDefinition Height="Auto"/>
                         </Grid.RowDefinitions>
                         
-                        <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Source CIFS Settings" FontWeight="Bold" FontSize="14" Margin="0,5,0,5"/>
+                        <TextBlock Grid.Row="0" Grid.ColumnSpan="2" Text="Source CIFS Settings" Style="{StaticResource SectionHeading}" FontSize="14" Margin="0,5,0,5"/>
                         <Label Grid.Row="1" Grid.Column="0" Content="Default Site Name"/>
                         <TextBox Grid.Row="1" Grid.Column="1" Name="txtSrcSite" ToolTip="AD site for CIFS server (used by Rollback)"/>
                         <Label Grid.Row="2" Grid.Column="0" Content="Discovery Mode"/>
@@ -197,7 +392,7 @@ if (Test-Path $configPath) {
                         <Label Grid.Row="4" Grid.Column="0" Content="NetBIOS Alias"/>
                         <TextBox Grid.Row="4" Grid.Column="1" Name="txtSrcNetbios" ToolTip="Source CIFS server alias (used by Rollback)"/>
                         
-                        <TextBlock Grid.Row="6" Grid.ColumnSpan="2" Text="Destination CIFS Settings" FontWeight="Bold" FontSize="14" Margin="0,5,0,5"/>
+                        <TextBlock Grid.Row="6" Grid.ColumnSpan="2" Text="Destination CIFS Settings" Style="{StaticResource SectionHeading}" FontSize="14" Margin="0,5,0,5"/>
                         <Label Grid.Row="7" Grid.Column="0" Content="Default Site Name"/>
                         <TextBox Grid.Row="7" Grid.Column="1" Name="txtDestSite" ToolTip="AD site for CIFS server (used by DomainMigration)"/>
                         <Label Grid.Row="8" Grid.Column="0" Content="Discovery Mode"/>
@@ -219,7 +414,7 @@ if (Test-Path $configPath) {
             <TabItem Header="Options">
                 <ScrollViewer VerticalScrollBarVisibility="Auto" Padding="10">
                     <StackPanel>
-                        <TextBlock Text="DFS &amp; Group Settings" FontWeight="Bold" FontSize="14" Margin="0,5,0,10"/>
+                        <TextBlock Text="DFS &amp; Group Settings" Style="{StaticResource SectionHeading}" FontSize="14" Margin="0,5,0,10"/>
                         <CheckBox Name="chkSkipDfs" Content="Skip DFS handling"/>
                         <CheckBox Name="chkCreateDfsLinks" Content="Create destination DFS links"/>
                         <StackPanel Orientation="Horizontal" Margin="0,5">
@@ -241,7 +436,7 @@ if (Test-Path $configPath) {
                             <TextBox Name="txtDestGroupOu" Width="400"/>
                         </StackPanel>
                         <Separator Margin="0,10"/>
-                        <TextBlock Text="Paths &amp; Approvals" FontWeight="Bold" FontSize="14" Margin="0,5,0,10"/>
+                        <TextBlock Text="Paths &amp; Approvals" Style="{StaticResource SectionHeading}" FontSize="14" Margin="0,5,0,10"/>
                         <StackPanel Orientation="Horizontal" Margin="0,5">
                             <Label Content="Export Root" Width="180"/>
                             <TextBox Name="txtExportRoot" Width="400"/>
@@ -259,8 +454,8 @@ if (Test-Path $configPath) {
             <!-- Preflight Tab -->
             <TabItem Header="Preflight">
                 <StackPanel Margin="10">
-                    <TextBlock Text="Preflight Test Settings" FontWeight="Bold" FontSize="14" Margin="0,5,0,10"/>
-                    <TextBlock Text="These settings define where the preflight test share and group are created." Foreground="Gray" Margin="0,0,0,10"/>
+                    <TextBlock Text="Preflight Test Settings" Style="{StaticResource SectionHeading}" FontSize="14" Margin="0,5,0,10"/>
+                    <TextBlock Text="These settings define where the preflight test share and group are created." Foreground="{DynamicResource UiHelperBrush}" Margin="0,0,0,10"/>
                     <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="150"/>
@@ -357,6 +552,11 @@ if (Test-Path $configPath) {
                             <ComboBoxItem Content="Destination"/>
                             <ComboBoxItem Content="Both"/>
                         </ComboBox>
+                        <StackPanel Grid.Column="4" Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center" Margin="0,0,8,0">
+                            <Button Name="btnConsoleFontSmall" Content="S" FontSize="11" FontWeight="Bold" Width="28" Height="25" Padding="0" Margin="2" ToolTip="Small console text"/>
+                            <Button Name="btnConsoleFontDefault" Content="M" FontSize="11" FontWeight="Bold" Width="28" Height="25" Padding="0" Margin="2" ToolTip="Default console text"/>
+                            <Button Name="btnConsoleFontLarge" Content="L" FontSize="11" FontWeight="Bold" Width="28" Height="25" Padding="0" Margin="2" ToolTip="Large console text"/>
+                        </StackPanel>
                         <Button Grid.Column="5" Name="btnRun" Content="▶ Run" Padding="12,4" Margin="2" FontWeight="Bold" Background="#4CAF50" Foreground="White"/>
                         <Button Grid.Column="6" Name="btnRunStop" Content="⏹ Stop" Padding="12,4" Margin="2" IsEnabled="False" Background="#f44336" Foreground="White"/>
                         <Button Grid.Column="7" Name="btnRunClear" Content="🗑 Clear" Padding="8,4" Margin="2"/>
@@ -385,6 +585,8 @@ if (Test-Path $configPath) {
             </TabItem>
         </TabControl>
     </DockPanel>
+    </Grid>
+    </Border>
 </Window>
 "@
 
@@ -392,11 +594,88 @@ if (Test-Path $configPath) {
 $reader = [System.Xml.XmlNodeReader]::new($xaml)
 $window = [System.Windows.Markup.XamlReader]::Load($reader)
 
+# --- Runtime app icon (replaces the PowerShell host icon on the taskbar) ---
+function New-ShareMigIcon {
+    $size = 64
+    $visual = [System.Windows.Media.DrawingVisual]::new()
+    $dc = $visual.RenderOpen()
+    $bg = [System.Windows.Media.SolidColorBrush]::new([System.Windows.Media.Color]::FromRgb(0x18, 0xA9, 0x57))
+    $dc.DrawRoundedRectangle($bg, $null, [System.Windows.Rect]::new(0, 0, $size, $size), 14, 14)
+    try {
+        $ft = [System.Windows.Media.FormattedText]::new(
+            [string][char]0x26A1,
+            [System.Globalization.CultureInfo]::InvariantCulture,
+            [System.Windows.FlowDirection]::LeftToRight,
+            [System.Windows.Media.Typeface]::new('Segoe UI Symbol'),
+            40, [System.Windows.Media.Brushes]::White, 1.0)
+        $dc.DrawText($ft, [System.Windows.Point]::new(($size - $ft.Width) / 2, ($size - $ft.Height) / 2))
+    } catch { }
+    $dc.Close()
+    $rtb = [System.Windows.Media.Imaging.RenderTargetBitmap]::new($size, $size, 96, 96, [System.Windows.Media.PixelFormats]::Pbgra32)
+    $rtb.Render($visual)
+    return $rtb
+}
+try { $window.Icon = New-ShareMigIcon } catch { }
+
 # --- Get controls ---
 $controls = @{}
 $xaml.SelectNodes('//*[@Name]') | ForEach-Object {
     $controls[$_.Name] = $window.FindName($_.Name)
 }
+
+$script:IsMax = $false
+$script:RestoreBounds = $null
+
+function Update-RootClip {
+    $w = $controls['rootGrid'].ActualWidth
+    $h = $controls['rootGrid'].ActualHeight
+    if ($w -le 0 -or $h -le 0) { return }
+    $radius = if ($script:IsMax) { 0 } else { 11 }
+    $controls['rootGrid'].Clip = [System.Windows.Media.RectangleGeometry]::new([System.Windows.Rect]::new(0, 0, $w, $h), $radius, $radius)
+}
+
+function Set-WindowMaximized {
+    $wa = [System.Windows.SystemParameters]::WorkArea
+    $script:RestoreBounds = @{ Left = $window.Left; Top = $window.Top; Width = $window.Width; Height = $window.Height }
+    $window.Left = $wa.Left; $window.Top = $wa.Top; $window.Width = $wa.Width; $window.Height = $wa.Height
+    $script:IsMax = $true
+    $controls['appFrame'].Margin = [System.Windows.Thickness]::new(0)
+    $controls['appFrame'].CornerRadius = [System.Windows.CornerRadius]::new(0)
+    $controls['titleBar'].CornerRadius = [System.Windows.CornerRadius]::new(0)
+    $controls['btnMaximize'].Content = [char]0x2750
+    Update-RootClip
+}
+
+function Set-WindowRestored {
+    if ($script:RestoreBounds) {
+        $window.Left = $script:RestoreBounds.Left; $window.Top = $script:RestoreBounds.Top
+        $window.Width = $script:RestoreBounds.Width; $window.Height = $script:RestoreBounds.Height
+    }
+    $script:IsMax = $false
+    $controls['appFrame'].Margin = [System.Windows.Thickness]::new(12)
+    $controls['appFrame'].CornerRadius = [System.Windows.CornerRadius]::new(12)
+    $controls['titleBar'].CornerRadius = [System.Windows.CornerRadius]::new(11, 11, 0, 0)
+    $controls['btnMaximize'].Content = [char]0x25A1
+    Update-RootClip
+}
+
+function Toggle-WindowMax {
+    if ($script:IsMax) { Set-WindowRestored } else { Set-WindowMaximized }
+}
+
+$controls['titleBar'].Add_MouseLeftButtonDown({
+    param($sender, $eventArgs)
+    if ($eventArgs.ClickCount -eq 2) {
+        Toggle-WindowMax
+    } else {
+        if ($script:IsMax) { Set-WindowRestored }
+        $window.DragMove()
+    }
+})
+$controls['btnMinimize'].Add_Click({ $window.WindowState = 'Minimized' })
+$controls['btnMaximize'].Add_Click({ Toggle-WindowMax })
+$controls['btnClose'].Add_Click({ $window.Close() })
+$controls['rootGrid'].Add_SizeChanged({ Update-RootClip })
 
 # --- State ---
 $script:ConfigPath = $Path
@@ -1154,19 +1433,41 @@ $script:RunTimer = $null
 $script:RunStartTime = $null
 $script:LastLogFile = $null
 
-# Mode → Target relevance: only these modes use -Target
-$script:TargetModes = @('TestCredentials', 'ResetCifsPassword', 'SetSPN')
+# Mode → target options. Export always reads from Source; Sync follows configured pairs.
+$script:TargetOptionsByMode = @{
+    'Export'             = @('Source')
+    'Import'             = @('Source', 'Destination')
+    'TestCredentials'    = @('Source', 'Destination', 'Both')
+    'ResetCifsPassword'  = @('Source', 'Destination', 'Both')
+    'SetSPN'             = @('Source', 'Destination', 'Both')
+}
 
-# Disable Target dropdown for modes that don't use it
+function Set-RunTargetOptions {
+    param([string]$Mode)
+
+    $options = $script:TargetOptionsByMode[$Mode]
+    $controls['cmbRunTarget'].Items.Clear()
+    if ($options) {
+        foreach ($option in $options) {
+            $controls['cmbRunTarget'].Items.Add($option) | Out-Null
+        }
+        $controls['cmbRunTarget'].SelectedIndex = 0
+        $controls['cmbRunTarget'].IsEnabled = $options.Count -gt 1
+        $controls['cmbRunTarget'].Opacity = if ($options.Count -gt 1) { 1.0 } else { 0.4 }
+    } else {
+        $controls['cmbRunTarget'].Items.Add('Config-driven') | Out-Null
+        $controls['cmbRunTarget'].SelectedIndex = 0
+        $controls['cmbRunTarget'].IsEnabled = $false
+        $controls['cmbRunTarget'].Opacity = 0.4
+    }
+}
+
 $controls['cmbRunMode'].Add_SelectionChanged({
-    $mode = $controls['cmbRunMode'].Text
-    $needsTarget = $mode -in $script:TargetModes
-    $controls['cmbRunTarget'].IsEnabled = $needsTarget
-    $controls['cmbRunTarget'].Opacity = if ($needsTarget) { 1.0 } else { 0.4 }
+    param($sender, $eventArgs)
+    $selectedMode = if ($eventArgs.AddedItems.Count -gt 0) { "$($eventArgs.AddedItems[0].Content)" } else { $sender.Text }
+    Set-RunTargetOptions -Mode $selectedMode
 })
-# Set initial state
-$controls['cmbRunTarget'].IsEnabled = $controls['cmbRunMode'].Text -in $script:TargetModes
-$controls['cmbRunTarget'].Opacity = if ($controls['cmbRunMode'].Text -in $script:TargetModes) { 1.0 } else { 0.4 }
+Set-RunTargetOptions -Mode $controls['cmbRunMode'].Text
 
 function Append-Console {
     param([string]$Text)
@@ -1176,16 +1477,91 @@ function Append-Console {
     }, [System.Windows.Threading.DispatcherPriority]::Background)
 }
 
+$script:ThemePalette = @{
+    'Dark' = @{ Window = '#1F2329'; Surface = '#2B313A'; TitleBar = '#171A20'; Hover = '#3A4250'; ToolbarBtn = '#33506B'; ToolbarBtnText = '#EAF2FF'; Form = '#242A33'; FormText = '#F4F7FB'; Section = '#57D68D'; Helper = '#F4A7FF'; Input = '#FFFFFF'; Text = '#F4F7FB'; InputText = '#1F2933'; Muted = '#C7CBD1'; Border = '#64748B'; Accent = '#18A957'; AccentText = '#FFFFFF'; SelectedTab = '#E5E7EB'; SelectedTabText = '#172033'; Console = '#14181E'; ConsoleText = '#E5E7EB' }
+    'Light' = @{ Window = '#F2F4F7'; Surface = '#FFFFFF'; TitleBar = '#E4E9F0'; Hover = '#D6E4F5'; ToolbarBtn = '#FFFFFF'; ToolbarBtnText = '#172033'; Form = '#FFFFFF'; FormText = '#172033'; Section = '#147A43'; Helper = '#9C216C'; Input = '#FFFFFF'; Text = '#172033'; InputText = '#172033'; Muted = '#52606D'; Border = '#98A2B3'; Accent = '#0B67C2'; AccentText = '#FFFFFF'; SelectedTab = '#D9EAFE'; SelectedTabText = '#0B3D75'; Console = '#FFFFFF'; ConsoleText = '#172033' }
+    'Vivid' = @{ Window = '#12395E'; Surface = '#1C4E7A'; TitleBar = '#0A2740'; Hover = '#2A6098'; ToolbarBtn = '#2A6DA6'; ToolbarBtnText = '#F8FBFF'; Form = '#F3F8FD'; FormText = '#18324A'; Section = '#0E7C4A'; Helper = '#9C216C'; Input = '#FFFFFF'; Text = '#F8FBFF'; InputText = '#172033'; Muted = '#D7E9FA'; Border = '#86BEEA'; Accent = '#FFB000'; AccentText = '#172033'; SelectedTab = '#F4C542'; SelectedTabText = '#172033'; Console = '#071A2B'; ConsoleText = '#F0F8FF' }
+}
+
+function ConvertTo-Brush {
+    param([Parameter(Mandatory)] [string]$Color)
+    [System.Windows.Media.BrushConverter]::new().ConvertFromString($Color)
+}
+
+function Set-ShareMigTheme {
+    param([Parameter(Mandatory)] [string]$ThemeName)
+
+    $palette = $script:ThemePalette[$ThemeName]
+    if (-not $palette) { return }
+
+    $window.Resources['UiTextBrush'] = ConvertTo-Brush $palette.Text
+    $window.Resources['UiFormTextBrush'] = ConvertTo-Brush $palette.FormText
+    $window.Resources['UiSectionHeadingBrush'] = ConvertTo-Brush $palette.Section
+    $window.Resources['UiHelperBrush'] = ConvertTo-Brush $palette.Helper
+    $window.Resources['UiFormBrush'] = ConvertTo-Brush $palette.Form
+    $window.Resources['UiInputTextBrush'] = ConvertTo-Brush $palette.InputText
+    $window.Resources['UiSelectedTabBrush'] = ConvertTo-Brush $palette.SelectedTab
+    $window.Resources['UiSelectedTabTextBrush'] = ConvertTo-Brush $palette.SelectedTabText
+    $window.Resources['UiSurfaceBrush'] = ConvertTo-Brush $palette.Surface
+    $window.Resources['UiInputBrush'] = ConvertTo-Brush $palette.Input
+    $window.Resources['UiBorderBrush'] = ConvertTo-Brush $palette.Border
+    $window.Resources['UiMutedBrush'] = ConvertTo-Brush $palette.Muted
+    $window.Resources['UiWindowBrush'] = ConvertTo-Brush $palette.Window
+    $window.Resources['UiTitleBarBrush'] = ConvertTo-Brush $palette.TitleBar
+    $window.Resources['UiHoverBrush'] = ConvertTo-Brush $palette.Hover
+    $window.Resources['UiAccentBrush'] = ConvertTo-Brush $palette.Accent
+    $window.Resources['UiAccentTextBrush'] = ConvertTo-Brush $palette.AccentText
+    $window.Background = [System.Windows.Media.Brushes]::Transparent
+    $window.Foreground = ConvertTo-Brush $palette.Text
+    $controls['txtRunConsole'].Background = ConvertTo-Brush $palette.Console
+    $controls['txtRunConsole'].Foreground = ConvertTo-Brush $palette.ConsoleText
+    $controls['btnRun'].Background = ConvertTo-Brush $palette.Accent
+    $controls['btnRun'].Foreground = ConvertTo-Brush $palette.AccentText
+    $controls['btnAccentColor'].Background = ConvertTo-Brush $palette.Accent
+    $controls['btnAccentColor'].Foreground = ConvertTo-Brush $palette.AccentText
+    $controls['btnConsoleColor'].Background = ConvertTo-Brush $palette.Console
+    $controls['btnConsoleColor'].Foreground = ConvertTo-Brush $palette.ConsoleText
+    $controls['txtRunStatus'].Foreground = ConvertTo-Brush $palette.Text
+    $controls['txtRunElapsed'].Foreground = ConvertTo-Brush $palette.Muted
+    $controls['txtRawJson'].Background = ConvertTo-Brush $palette.Console
+    $controls['txtRawJson'].Foreground = ConvertTo-Brush $palette.ConsoleText
+    foreach ($tb in @('btnLoad', 'btnSave', 'btnSaveAs', 'btnValidate', 'btnNewCred', 'btnSetCred')) {
+        $controls[$tb].Background = ConvertTo-Brush $palette.ToolbarBtn
+        $controls[$tb].Foreground = ConvertTo-Brush $palette.ToolbarBtnText
+    }
+}
+
+function Select-ShareMigColor {
+    param(
+        [Parameter(Mandatory)] [string]$Title,
+        [Parameter(Mandatory)] [System.Windows.Controls.Control]$Control,
+        [Parameter(Mandatory)] [string]$Property
+    )
+
+    $dialog = [System.Windows.Forms.ColorDialog]::new()
+    if ($dialog.ShowDialog() -ne [System.Windows.Forms.DialogResult]::OK) { return }
+    $color = "#{0:X2}{1:X2}{2:X2}" -f $dialog.Color.R, $dialog.Color.G, $dialog.Color.B
+    $Control.$Property = ConvertTo-Brush $color
+}
+
+$controls['cmbTheme'].Add_SelectionChanged({
+    param($sender, $eventArgs)
+    if ($eventArgs.AddedItems.Count -gt 0) {
+        Set-ShareMigTheme -ThemeName "$($eventArgs.AddedItems[0].Content)"
+    }
+})
+$controls['btnAccentColor'].Add_Click({ Select-ShareMigColor -Title 'Accent color' -Control $controls['btnRun'] -Property 'Background'; $controls['btnAccentColor'].Background = $controls['btnRun'].Background })
+$controls['btnConsoleColor'].Add_Click({ Select-ShareMigColor -Title 'Console background color' -Control $controls['txtRunConsole'] -Property 'Background'; $controls['btnConsoleColor'].Background = $controls['txtRunConsole'].Background })
+Set-ShareMigTheme -ThemeName 'Dark'
+
 function Set-RunState {
     param([bool]$Running)
     $controls['btnRun'].IsEnabled = -not $Running
     $controls['btnRunStop'].IsEnabled = $Running
     $controls['cmbRunMode'].IsEnabled = -not $Running
-    # Only re-enable Target if mode uses it
+    # Restore mode-specific target options after execution completes.
     if (-not $Running) {
-        $needsTarget = $controls['cmbRunMode'].Text -in $script:TargetModes
-        $controls['cmbRunTarget'].IsEnabled = $needsTarget
-        $controls['cmbRunTarget'].Opacity = if ($needsTarget) { 1.0 } else { 0.4 }
+        Set-RunTargetOptions -Mode $controls['cmbRunMode'].Text
     } else {
         $controls['cmbRunTarget'].IsEnabled = $false
     }
@@ -1203,6 +1579,10 @@ $controls['btnRunClear'].Add_Click({
     $controls['txtRunStatus'].Text = 'Idle'
     $controls['txtRunStatus'].Foreground = [System.Windows.Media.Brushes]::Black
 })
+
+$controls['btnConsoleFontSmall'].Add_Click({ $controls['txtRunConsole'].FontSize = 11 })
+$controls['btnConsoleFontDefault'].Add_Click({ $controls['txtRunConsole'].FontSize = 14 })
+$controls['btnConsoleFontLarge'].Add_Click({ $controls['txtRunConsole'].FontSize = 19 })
 
 $controls['btnOpenLog'].Add_Click({
     $logDir = Join-Path $workspaceRoot 'scripts\share-migration\logs'
@@ -1254,11 +1634,11 @@ $controls['btnRun'].Add_Click({
     $scriptPath = Join-Path $workspaceRoot 'scripts\share-migration\Invoke-ShareMigration.ps1'
     $args = "-Mode $mode"
     if ($mode -eq 'Preflight') { $args += ' -ApprovePreflight' }
-    if ($mode -in @('TestCredentials', 'ResetCifsPassword', 'SetSPN')) { $args += " -Target $target" }
+    if ($mode -in @('Export', 'Import', 'TestCredentials', 'ResetCifsPassword', 'SetSPN')) { $args += " -Target $target" }
     
     Append-Console ''
     Append-Console "═══════════════════════════════════════════════════════════"
-    Append-Console "[GUI] Starting: $mode $(if ($mode -in @('TestCredentials','ResetCifsPassword','SetSPN')) { "(-Target $target)" })"
+    Append-Console "[GUI] Starting: $mode $(if ($mode -in @('Export','Import','TestCredentials','ResetCifsPassword','SetSPN')) { "(-Target $target)" })"
     Append-Console "[GUI] Script: $scriptPath $args"
     Append-Console "═══════════════════════════════════════════════════════════"
     
@@ -1396,4 +1776,7 @@ if (Test-Path -LiteralPath $Path) {
 }
 
 # --- Show window ---
+if ($HideConsole) {
+    try { [ShareMig.NativeUi]::ShowWindow([ShareMig.NativeUi]::GetConsoleWindow(), 0) | Out-Null } catch { }
+}
 $window.ShowDialog() | Out-Null
