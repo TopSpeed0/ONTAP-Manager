@@ -1,3 +1,15 @@
+# Workspace Tests
+
+## Share Migration SPN Registration
+
+`Test-ShareMigSpnRegistration.ps1` is an offline mocked test for automatic CIFS
+NetBIOS alias SPN registration. It validates missing SPNs, already-owned SPNs,
+and conflicts without contacting Active Directory or ONTAP.
+
+```powershell
+.\scripts\testing\Test-ShareMigSpnRegistration.ps1
+```
+
 # Test-WorkspaceHealth.ps1
 
 Comprehensive **read-only** health check for the ONTAP automation workspace and all configured clusters.

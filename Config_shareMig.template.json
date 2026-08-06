@@ -37,7 +37,7 @@
     "LogRoot": "scripts/share-migration/logs",
     "RequirePreflightApproval": true,
     "AutoRegisterSPN": false,
-    "_comment_AutoRegisterSPN": "When true, runs SETSPN -a automatically after CIFS domain join for NetBIOS aliases. When false, logs the commands as warnings for manual execution. Skipped entirely if no NetBIOS aliases are configured.",
+    "_comment_AutoRegisterSPN": "When true, automatically registers missing HOST SPNs after a CIFS domain join using the configured domain credential. The script checks SPN ownership first, equivalent to SETSPN -S, and stops before share import if an SPN conflicts or cannot be registered. When false, it logs SETSPN -S commands for manual execution. Skipped entirely if no NetBIOS aliases are configured.",
     "Preflight": {
       "Cluster": "cluster.fqdn",
       "Vserver": "SVM_NAME",
