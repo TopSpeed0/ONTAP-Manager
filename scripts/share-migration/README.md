@@ -26,6 +26,34 @@ Start-ScriptManager
 .\scripts\share-migration\Invoke-ShareMigration.ps1 -Mode Rollback -SnapshotPath <path>
 ```
 
+### Share Migration Manager (GUI)
+
+`Start-ShareMigManager.ps1` opens the themed WPF console for editing config and running modes.
+
+```powershell
+# Dev / interactive — console stays visible (use this while developing)
+.\scripts\share-migration\Start-ShareMigManager.ps1
+
+# Visible with a specific config file
+.\scripts\share-migration\Start-ShareMigManager.ps1 -Path .\Config_shareMig.json.bak
+
+# Production — hide the console so only the themed window (green ⚡ taskbar icon) shows
+.\scripts\share-migration\Start-ShareMigManager.ps1 -HideConsole
+
+# Fully detached launch (shortcut-friendly)
+Start-Process pwsh -WindowStyle Hidden -ArgumentList '-File', '.\scripts\share-migration\Start-ShareMigManager.ps1', '-HideConsole'
+```
+
+| Parameter | Purpose |
+|-----------|---------|
+| `-Path` | Config file to open (defaults to `Config_shareMig.json`) |
+| `-HideConsole` | Hides the owning console window; the taskbar button then uses the app icon instead of the pwsh icon. Omit it during development so your terminal stays visible. |
+
+Import in the GUI supports a **Target** selector: `Source` re-applies shares/ACLs to the source
+SVM and source AD (share recovery), `Destination` applies them to the destination SVM and
+destination AD (cross-domain migration). Foreign-domain group ACLs and protected groups
+(`Domain Admins`, `Enterprise Admins`, `Administrators`) are skipped automatically.
+
 ## Configuration
 
 - **`Config_shareMig.json`** — Live config (gitignored)

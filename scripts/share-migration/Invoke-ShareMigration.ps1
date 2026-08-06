@@ -207,6 +207,7 @@ function Ensure-NcCredential {
 
 # Well-known principals that exist outside AD — skip AD lookups for these.
 $script:WellKnownPrincipals = @('Everyone', 'BUILTIN\Administrators', 'BUILTIN\Users', 'BUILTIN\Backup Operators', 'NT AUTHORITY\SYSTEM', 'NT AUTHORITY\Authenticated Users')
+$script:ProtectedMembershipGroups = @('Domain Admins', 'Enterprise Admins', 'Administrators')
 
 function Invoke-ShareMigCli {
     param(
@@ -697,10 +698,11 @@ function Ensure-ShareMigAdGroup {
         [Parameter(Mandatory)] [string]$GroupOuPath
     )
 
-    $group = Get-ADGroup -Identity $GroupName -Server $DomainControllerName -Credential $Credential -ErrorAction SilentlyContinue
+    $escapedGroupName = $GroupName.Replace("'", "''")
+    $group = @(Get-ADGroup -Filter "Name -eq '$escapedGroupName' -or SamAccountName -eq '$escapedGroupName'" -SearchBase $GroupOuPath -Server $DomainControllerName -Credential $Credential -ErrorAction Stop | Select-Object -First 1)
     if ($group) {
         Write-ShareMigLog "Found AD group '$GroupName'" 'PASS'
-        return $group
+        return $group[0]
     }
 
     Write-ShareMigLog "Creating AD group '$GroupName'" 'INFO'
@@ -714,6 +716,12 @@ function Add-ShareMigGroupMembers {
         [Parameter(Mandatory)] [string]$GroupName,
         [Parameter(Mandatory)] [string[]]$Members
     )
+
+    $shortGroupName = if ($GroupName -match '\\') { ($GroupName -split '\\', 2)[1] } else { $GroupName }
+    if ($script:ProtectedMembershipGroups -contains $shortGroupName) {
+        Write-ShareMigLog "Skipping membership update for protected group '$GroupName'. Domain Admins, Enterprise Admins, and Administrators are never changed automatically." 'WARN'
+        return
+    }
 
     foreach ($member in $Members | Sort-Object -Unique) {
         try {
@@ -897,6 +905,56 @@ function Export-ShareMigration {
     return $snapshot
 }
 
+function Format-ShareMigExportSummary {
+    param([Parameter(Mandatory)] $Snapshot)
+
+    $rows = foreach ($pair in @($Snapshot.Pairs)) {
+        foreach ($share in @($pair.Shares)) {
+            $aclSummary = @($share.Acl | ForEach-Object { "$($_.Principal) ($($_.Permission))" }) -join '; '
+            [pscustomobject]@{
+                Pair   = $pair.PairName
+                Source = "$($pair.Source)/$($pair.Vserver)"
+                Share  = $share.ShareName
+                Path   = $share.Path
+                ACLs   = $aclSummary
+            }
+        }
+    }
+
+    "`nExport Summary"
+    "Exported: $($Snapshot.Metadata.ExportedAt)"
+    "Domain:   $($Snapshot.Metadata.Domain)"
+    "Shares:   $($rows.Count)"
+    ''
+    $rows | Format-Table -AutoSize -Wrap | Out-String -Width 240
+}
+
+function Format-ShareMigImportSummary {
+    param(
+        [Parameter(Mandatory)] $Snapshot,
+        [Parameter(Mandatory)] [string]$ImportTarget
+    )
+
+    $rows = foreach ($pair in @($Snapshot.Pairs)) {
+        foreach ($share in @($pair.Shares)) {
+            [pscustomobject]@{
+                Pair       = $pair.PairName
+                Share      = $share.ShareName
+                Path       = $share.Path
+                ACLCount   = @($share.Acl).Count
+                ACLSummary = @($share.Acl | ForEach-Object { "$($_.Principal) ($($_.Permission))" }) -join '; '
+            }
+        }
+    }
+
+    "`nImport Summary"
+    "Target:   $ImportTarget"
+    "Snapshot: $($Snapshot.Metadata.ExportedAt)"
+    "Shares:   $($rows.Count)"
+    ''
+    $rows | Format-Table -AutoSize -Wrap | Out-String -Width 240
+}
+
 function Test-ShareMigSkipGroupCreation {
     param([Parameter(Mandatory)] $Config)
     return [bool]($Config.ShareMigration.SkipGroupCreation)
@@ -911,6 +969,7 @@ function Ensure-ShareMigAclTarget {
         [pscredential]$DomainCredential,
         [string]$GroupOuPath,
         [string]$GroupPrefix,
+        [string]$TargetDomainNetbiosName,
         [Parameter(Mandatory)] [string]$DestinationClusterName,
         [Parameter(Mandatory)] [string]$DestinationVserver
     )
@@ -937,7 +996,14 @@ function Ensure-ShareMigAclTarget {
 
         foreach ($acl in @($Share.Acl)) {
             if ($acl.PrincipalType -eq 'Group') {
-                $group = Ensure-ShareMigAdGroup -DomainControllerName $DomainControllerName -Credential $DomainCredential -GroupName $acl.Principal -GroupOuPath $GroupOuPath
+                $isForeignDomainGroup = $acl.Principal -match '^(?<Domain>[^\\]+)\\' -and $Matches.Domain -ne $TargetDomainNetbiosName
+                if ($isForeignDomainGroup) {
+                    Write-ShareMigLog "Skipping foreign-domain group '$($acl.Principal)' on '$($Share.ShareName)' (target AD NetBIOS name: $TargetDomainNetbiosName)" 'WARN'
+                    continue
+                }
+
+                $groupName = if ($acl.Principal -match '\\') { ($acl.Principal -split '\\', 2)[1] } else { $acl.Principal }
+                $group = Ensure-ShareMigAdGroup -DomainControllerName $DomainControllerName -Credential $DomainCredential -GroupName $groupName -GroupOuPath $GroupOuPath
                 if ($acl.GroupMembers) {
                     Add-ShareMigGroupMembers -DomainControllerName $DomainControllerName -Credential $DomainCredential -GroupName $group.Name -Members @($acl.GroupMembers)
                 }
@@ -978,18 +1044,33 @@ function Ensure-ShareMigAclTarget {
         Write-ShareMigLog "Share '$($Share.ShareName)' already exists on $DestinationClusterName/$DestinationVserver" 'PASS'
     }
 
+    $existingAcls = @(Get-NcCifsShareAcl -Share $Share.ShareName -VserverContext $DestinationVserver -ErrorAction Stop)
     foreach ($acl in @($Share.Acl)) {
         $targetPrincipal = $acl.Principal
+
+        $isForeignDomainGroup = $acl.PrincipalType -eq 'Group' -and $acl.Principal -match '^(?<Domain>[^\\]+)\\' -and $Matches.Domain -ne $TargetDomainNetbiosName
+        if ($isForeignDomainGroup) {
+            continue
+        }
 
         # When SkipGroupCreation is off, individual users get promoted to groups
         if (-not $skipGroups -and $acl.PrincipalType -eq 'User') {
             $targetPrincipal = New-ShareMigGroupName -Prefix $GroupPrefix -ShareName $Share.ShareName -Permission $acl.Permission
         }
 
+        $matchingAcl = $existingAcls | Where-Object {
+            $_.UserOrGroup -eq $targetPrincipal -and $_.Permission -eq $acl.Permission
+        } | Select-Object -First 1
+        if ($matchingAcl) {
+            Write-ShareMigLog "ACL '$targetPrincipal' on share '$($Share.ShareName)' already applied; skipped" 'PASS'
+            continue
+        }
+
         if ($PSCmdlet.ShouldProcess("$DestinationClusterName/$DestinationVserver", "Apply ACL $targetPrincipal -> $($Share.ShareName)")) {
             try {
                 Add-NcCifsShareAcl -Share $Share.ShareName -UserOrGroup $targetPrincipal -Permission $acl.Permission -VserverContext $DestinationVserver -ErrorAction Stop | Out-Null
                 Write-ShareMigLog "Applied ACL '$targetPrincipal' => '$($Share.ShareName)' ($($acl.Permission))" 'PASS'
+                $existingAcls += [pscustomobject]@{ UserOrGroup = $targetPrincipal; Permission = $acl.Permission }
             }
             catch {
                 Write-ShareMigLog "ACL '$targetPrincipal' on share '$($Share.ShareName)' failed: $($_.Exception.Message)" 'WARN'
@@ -1044,7 +1125,15 @@ function Import-ShareMigration {
 
     $snapshot = Get-Content -LiteralPath $SnapshotFile -Raw | ConvertFrom-Json
     $groupPrefix = $Config.ShareMigration.GroupNamePrefix
-    $groupOuPath = if ($Config.ShareMigration.DestinationGroupOuPath) { $Config.ShareMigration.DestinationGroupOuPath } else { $Config.ShareMigration.GroupOuPath }
+    if ($Target -eq 'Both') {
+        throw "Import requires -Target Source or -Target Destination. Target Both is not supported."
+    }
+
+    $groupOuPath = if ($Target -eq 'Source') {
+        $Config.ShareMigration.SourceGroupOuPath ?? $Config.ShareMigration.GroupOuPath
+    } else {
+        $Config.ShareMigration.DestinationGroupOuPath ?? $Config.ShareMigration.GroupOuPath
+    }
 
     foreach ($pairSnapshot in @($snapshot.Pairs)) {
         $pair = $Config.ShareMigration.Pairs | Where-Object { $_.Name -eq $pairSnapshot.PairName } | Select-Object -First 1
@@ -1054,15 +1143,22 @@ function Import-ShareMigration {
             throw $msg
         }
 
-        $destinationCluster = Resolve-ClusterEntry -ClusterName $pair.DestinationCluster -ClusterList $global:ONTAP_Clusters
-        $destinationVserver = if ($pair.DestinationVserver) { $pair.DestinationVserver } else { $DestinationVserver }
-        if ([string]::IsNullOrWhiteSpace($destinationVserver)) {
-            throw "DestinationVserver is required for pair '$($pair.Name)'"
+        $targetClusterName = if ($Target -eq 'Source') { $pair.SourceCluster } else { $pair.DestinationCluster }
+        $targetVserver = if ($Target -eq 'Source') {
+            if ($pair.SourceVserver) { $pair.SourceVserver } else { $SourceVserver }
+        } else {
+            if ($pair.DestinationVserver) { $pair.DestinationVserver } else { $DestinationVserver }
+        }
+        if ([string]::IsNullOrWhiteSpace($targetVserver)) {
+            throw "$Target Vserver is required for pair '$($pair.Name)'"
         }
 
-        Write-ShareMigLog "Importing pair '$($pair.Name)' to $($destinationCluster.cluster)/$destinationVserver" 'INFO'
+        $targetCluster = Resolve-ClusterEntry -ClusterName $targetClusterName -ClusterList $global:ONTAP_Clusters
+        $targetAdDomain = Get-ADDomain -Server $DomainControllerName -Credential $DomainCredential -ErrorAction Stop
+        $targetDomainNetbiosName = $targetAdDomain.NetBIOSName
+        Write-ShareMigLog "Importing pair '$($pair.Name)' to $($targetCluster.cluster)/$targetVserver (AD target: $Target, NetBIOS: $targetDomainNetbiosName)" 'INFO'
         foreach ($share in @($pairSnapshot.Shares)) {
-            Ensure-ShareMigAclTarget -Pair $pair -Share $share -Config $Config -DomainControllerName $DomainControllerName -DomainCredential $DomainCredential -GroupOuPath $groupOuPath -GroupPrefix $groupPrefix -DestinationClusterName $destinationCluster.cluster -DestinationVserver $destinationVserver
+            Ensure-ShareMigAclTarget -Pair $pair -Share $share -Config $Config -DomainControllerName $DomainControllerName -DomainCredential $DomainCredential -GroupOuPath $groupOuPath -GroupPrefix $groupPrefix -TargetDomainNetbiosName $targetDomainNetbiosName -DestinationClusterName $targetCluster.cluster -DestinationVserver $targetVserver
         }
     }
 
@@ -1194,19 +1290,30 @@ if (-not $skipGroups -or $autoRegisterSpn) {
 
 $resolvedDc = $null
 $domainCredential = $DomainCredential
+$adDomain = $shareMigConfig.ShareMigration.Domain
+$adCredentialName = $shareMigConfig.ShareMigration.SourceDomainCredentialName
+$adCredentialUser = $shareMigConfig.ShareMigration.SourceDomainUser
+$adController = @($shareMigConfig.ShareMigration.SourceDomainController)[0]
+
+if ($Mode -eq 'Import' -and $Target -eq 'Destination') {
+    $adDomain = $shareMigConfig.ShareMigration.DestinationDomain
+    $adCredentialName = $shareMigConfig.ShareMigration.DestinationDomainCredentialName
+    $adCredentialUser = $shareMigConfig.ShareMigration.DestinationDomainUser
+    $adController = $shareMigConfig.ShareMigration.DestinationDomainController
+}
 
 if (-not $skipGroups) {
     if (-not $domainCredential) {
-        $domainCredName = if ($shareMigConfig.ShareMigration.SourceDomainCredentialName) { $shareMigConfig.ShareMigration.SourceDomainCredentialName } else { 'administrator' }
-        $domainUser = Resolve-CredentialUserName -WorkspaceRoot $workspaceRoot -CredentialName $domainCredName -ConfigOverride $shareMigConfig.ShareMigration.SourceDomainUser -Fallback 'administrator'
+        $domainCredName = if ($adCredentialName) { $adCredentialName } else { 'administrator' }
+        $domainUser = Resolve-CredentialUserName -WorkspaceRoot $workspaceRoot -CredentialName $domainCredName -ConfigOverride $adCredentialUser -Fallback 'administrator'
         $domainCredential = Get-ClusterCredential -WorkspaceRoot $workspaceRoot -CredentialName $domainCredName -UserName $domainUser
     }
 
     if ([string]::IsNullOrWhiteSpace($DomainController)) {
-        $DomainController = @($shareMigConfig.ShareMigration.SourceDomainController)[0]
+        $DomainController = $adController
     }
 
-    $resolvedDc = Test-ShareMigAdConnection -Domain $shareMigConfig.ShareMigration.Domain -PreferredController $DomainController -Credential $domainCredential
+    $resolvedDc = Test-ShareMigAdConnection -Domain $adDomain -PreferredController $DomainController -Credential $domainCredential
 } else {
     Write-Host "SkipGroupCreation=true — AD connection skipped" -ForegroundColor Cyan
 }
@@ -1228,7 +1335,7 @@ switch ($Mode) {
     }
     'Export' {
         $result = Export-ShareMigration -Config $shareMigConfig -WorkspaceRoot $workspaceRoot -DomainControllerName $resolvedDc -DomainCredential $domainCredential
-        $result | ConvertTo-Json -Depth 12
+        Format-ShareMigExportSummary -Snapshot $result
     }
     'Import' {
         if ([string]::IsNullOrWhiteSpace($SnapshotPath)) {
@@ -1244,7 +1351,7 @@ switch ($Mode) {
             }
         }
         $result = Import-ShareMigration -SnapshotFile $SnapshotPath -Config $shareMigConfig -WorkspaceRoot $workspaceRoot -DomainControllerName $resolvedDc -DomainCredential $domainCredential
-        $result | ConvertTo-Json -Depth 12
+        Format-ShareMigImportSummary -Snapshot $result -ImportTarget $Target
     }
     'Sync' {
         $exported = Export-ShareMigration -Config $shareMigConfig -WorkspaceRoot $workspaceRoot -DomainControllerName $resolvedDc -DomainCredential $domainCredential
@@ -1253,7 +1360,7 @@ switch ($Mode) {
         }
         $exported | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath $SnapshotPath
         Import-ShareMigration -SnapshotFile $SnapshotPath -Config $shareMigConfig -WorkspaceRoot $workspaceRoot -DomainControllerName $resolvedDc -DomainCredential $domainCredential | Out-Null
-        $exported | ConvertTo-Json -Depth 12
+        Format-ShareMigExportSummary -Snapshot $exported
     }
     'DomainMigration' {
         # --- Validate domain credentials are configured ---
