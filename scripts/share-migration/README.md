@@ -41,6 +41,7 @@ Key fields:
 | `SourceOrganizationalUnit` | OU for computer account (e.g. `CN=Computers`) |
 | `SourceNetbiosAlias` | NetBIOS alias registered during CIFS create |
 | `DestinationDiscoveryMode` | Same as above, for destination domain |
+| `AutoRegisterSPN` | When true, registers missing alias HOST SPNs after a successful CIFS join using the configured domain credential; conflicts stop before share import. |
 
 ## Iron Rules — CIFS Domain Migration Order
 
@@ -80,6 +81,17 @@ These rules are **non-negotiable**. Violating the order causes RPC timeouts, sta
    └─ If stale AD computer object exists → Remove-ADComputer first
 5. IMPORT shares from snapshot
 ```
+
+## NetBIOS Alias and SPN Registration
+
+When a CIFS server uses a NetBIOS alias, Kerberos requires matching HOST SPNs.
+Set `AutoRegisterSPN` to `true` to register them automatically after a successful
+CIFS join. The script uses the configured domain credential, checks each SPN's
+current owner before writing, and stops before share import if it finds a conflict
+or cannot register an SPN.
+
+With `AutoRegisterSPN` set to `false`, the script logs manual commands using
+duplicate-safe `SETSPN -S` syntax instead.
 
 ### Why This Order?
 
@@ -169,17 +181,6 @@ The script determines discovery-mode using this priority:
    - Neither → `all`
 
 Use explicit mode when AD topology doesn't match auto-logic (e.g., subnets moved to another domain's Sites & Services).
-
-## NetBIOS Alias & SPN
-
-When CIFS is created with `-NetbiosAlias`, clients can access the SVM using the alias name. However, Kerberos authentication requires SPNs to be registered manually:
-
-```cmd
-SETSPN -a host/<alias> <CifsServerName>
-SETSPN -a host/<alias>.<domain> <CifsServerName>
-```
-
-The script logs these commands as `ACTION REQUIRED` after CIFS creation.
 
 ## Files
 

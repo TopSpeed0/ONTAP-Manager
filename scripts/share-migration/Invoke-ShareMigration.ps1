@@ -321,8 +321,8 @@ function Set-ShareMigDns {
     )
 
     # Connect to cluster via ZAPI
-    $cluster = Resolve-ClusterEntry -ClusterName $cluster -ClusterList $global:ONTAP_Clusters
-    & $cluster.cluster | Out-Null
+    $clusterEntry = Resolve-ClusterEntry -ClusterName $cluster -ClusterList $global:ONTAP_Clusters
+    & $clusterEntry.cluster | Out-Null
 
     # Capture current DNS for logging / rollback
     $currentDns = Get-NcNetDns -VserverContext $Vserver
@@ -354,8 +354,8 @@ function Set-ShareMigPreferredDc {
         [Parameter(Mandatory)] [string[]]$DomainControllers
     )
 
-    $cluster = Resolve-ClusterEntry -ClusterName $cluster -ClusterList $global:ONTAP_Clusters
-    & $cluster.cluster | Out-Null
+    $clusterEntry = Resolve-ClusterEntry -ClusterName $cluster -ClusterList $global:ONTAP_Clusters
+    & $clusterEntry.cluster | Out-Null
 
     # Capture current preferred DCs for rollback
     $currentPrefDc = Get-NcCifsPreferredDomainController -Domain $Domain | Where-Object { $_.Vserver -eq $Vserver }
@@ -490,6 +490,113 @@ function Test-DomainComputerPermission {
     }
 }
 
+function Register-ShareMigAliasSpns {
+    <#
+    .SYNOPSIS
+        Register missing HOST SPNs for CIFS NetBIOS aliases with SETSPN -S-style ownership checks.
+    #>
+    param(
+        [Parameter(Mandatory)] [string]$CifsServerName,
+        [Parameter(Mandatory)] [string[]]$Aliases,
+        [Parameter(Mandatory)] [string]$Domain,
+        [Parameter(Mandatory)] [string]$DomainController,
+        [Parameter(Mandatory)] [pscredential]$Credential,
+        [string]$LogPrefix = ''
+    )
+
+    $prefix = if ($LogPrefix) { "$LogPrefix " } else { '' }
+    $registered = 0
+    $alreadyPresent = 0
+    $conflicts = 0
+    $failed = 0
+
+    try {
+        $adComputer = Get-ADComputer -Identity $CifsServerName -Server $DomainController -Credential $Credential -Properties servicePrincipalName -ErrorAction Stop
+    } catch {
+        Write-ShareMigLog "${prefix}Could not read AD computer '$CifsServerName' for SPN registration: $($_.Exception.Message)" 'ERROR'
+        return [pscustomobject]@{
+            Success        = $false
+            Registered     = 0
+            AlreadyPresent = 0
+            Conflicts      = 0
+            Failed         = 1
+        }
+    }
+
+    $targetDistinguishedName = $adComputer.DistinguishedName
+    $existingSpns = @($adComputer.servicePrincipalName)
+    $requestedSpns = foreach ($alias in @($Aliases | Where-Object { $_ } | ForEach-Object { $_.Trim() } | Sort-Object -Unique)) {
+        "HOST/$alias"
+        "HOST/$alias.$Domain"
+    }
+    $spnsToRegister = [System.Collections.Generic.List[string]]::new()
+
+    foreach ($spn in @($requestedSpns | Sort-Object -Unique)) {
+        if ($existingSpns -contains $spn) {
+            Write-ShareMigLog "${prefix}SPN already present: $spn -> $CifsServerName" 'INFO'
+            $alreadyPresent++
+            continue
+        }
+
+        try {
+            $spnOwners = @(Get-ADObject -LDAPFilter "(servicePrincipalName=$spn)" -Server $DomainController -Credential $Credential -Properties distinguishedName -ErrorAction Stop)
+        } catch {
+            Write-ShareMigLog "${prefix}Could not check SPN ownership for ${spn}: $($_.Exception.Message)" 'ERROR'
+            $failed++
+            continue
+        }
+
+        $otherOwners = @($spnOwners | Where-Object { $_.DistinguishedName -ne $targetDistinguishedName })
+        if ($otherOwners.Count -gt 0) {
+            Write-ShareMigLog "${prefix}SPN conflict: $spn is already owned by $($otherOwners.DistinguishedName -join ', ')" 'ERROR'
+            $conflicts++
+            continue
+        }
+
+        if ($spnOwners.Count -gt 0) {
+            Write-ShareMigLog "${prefix}SPN already present: $spn -> $CifsServerName" 'INFO'
+            $alreadyPresent++
+            continue
+        }
+
+        $spnsToRegister.Add($spn)
+    }
+
+    # Do not leave a partially registered alias set behind when any requested SPN conflicts.
+    if ($conflicts -gt 0 -or $failed -gt 0) {
+        Write-ShareMigLog "${prefix}SPN summary: 0 registered, $alreadyPresent already present, $conflicts conflicts, $failed failed" 'ERROR'
+        return [pscustomobject]@{
+            Success        = $false
+            Registered     = 0
+            AlreadyPresent = $alreadyPresent
+            Conflicts      = $conflicts
+            Failed         = $failed
+        }
+    }
+
+    foreach ($spn in $spnsToRegister) {
+        try {
+            Set-ADComputer -Identity $targetDistinguishedName -Add @{ servicePrincipalName = $spn } -Server $DomainController -Credential $Credential -ErrorAction Stop
+            Write-ShareMigLog "${prefix}SPN registered: $spn -> $CifsServerName (DC: $DomainController)" 'PASS'
+            $existingSpns += $spn
+            $registered++
+        } catch {
+            Write-ShareMigLog "${prefix}SPN registration failed: $spn -> $CifsServerName - $($_.Exception.Message)" 'ERROR'
+            $failed++
+        }
+    }
+
+    $success = $conflicts -eq 0 -and $failed -eq 0
+    Write-ShareMigLog "${prefix}SPN summary: $registered registered, $alreadyPresent already present, $conflicts conflicts, $failed failed" $(if ($success) { 'PASS' } else { 'ERROR' })
+    return [pscustomobject]@{
+        Success        = $success
+        Registered     = $registered
+        AlreadyPresent = $alreadyPresent
+        Conflicts      = $conflicts
+        Failed         = $failed
+    }
+}
+
 function Invoke-CifsPasswordReset {
     <#
     .SYNOPSIS
@@ -505,8 +612,8 @@ function Invoke-CifsPasswordReset {
     # Ensure we're connected to the cluster
     $controller = $global:CurrentNcController
     if (-not $controller -or $controller.Name -ne $cluster) {
-        $cluster = Resolve-ClusterEntry -ClusterName $cluster -ClusterList $global:ONTAP_Clusters
-        & $cluster.cluster
+        $clusterEntry = Resolve-ClusterEntry -ClusterName $cluster -ClusterList $global:ONTAP_Clusters
+        & $clusterEntry.cluster
         $controller = $global:CurrentNcController
     }
 
@@ -1076,11 +1183,12 @@ $workspaceRoot = Get-WorkspaceRoot
 
 $shareMigConfig = Get-ShareMigrationConfig -WorkspaceRoot $workspaceRoot -Path $ShareMigrationConfigPath
 $skipGroups = Test-ShareMigSkipGroupCreation -Config $shareMigConfig
+$autoRegisterSpn = [bool]$shareMigConfig.ShareMigration.AutoRegisterSPN
 
-# AD module is only required when group creation is enabled
-if (-not $skipGroups) {
+# AD cmdlets are required for group creation and automatic SPN registration.
+if (-not $skipGroups -or $autoRegisterSpn) {
     try { Import-Module ActiveDirectory -ErrorAction Stop } catch {
-        throw "ActiveDirectory module is required when SkipGroupCreation=false. Install RSAT / AD tools first. $($_.Exception.Message)"
+        throw "ActiveDirectory module is required when SkipGroupCreation=false or AutoRegisterSPN=true. Install RSAT / AD tools first. $($_.Exception.Message)"
     }
 }
 
@@ -1389,21 +1497,16 @@ switch ($Mode) {
                     Write-ShareMigLog "--- Registering SPNs for NetBIOS aliases (via AD credential) ---" 'INFO'
                     $spnCred = [pscredential]::new($destCredUser, (ConvertTo-SecureString $destDomainPass -AsPlainText -Force))
                     $spnDc = @($shareMigConfig.ShareMigration.DestinationDomainController)[0]
-                    foreach ($alias in $aliases) {
-                        foreach ($spn in @("host/$alias", "host/$alias.$destDomain")) {
-                            try {
-                                Set-ADComputer -Identity $cifsName -Add @{servicePrincipalName = $spn} -Server $spnDc -Credential $spnCred -ErrorAction Stop
-                                Write-ShareMigLog "  SPN registered: $spn → $cifsName (DC: $spnDc)" 'PASS'
-                            } catch {
-                                Write-ShareMigLog "  SPN failed: $spn → $cifsName — $($_.Exception.Message)" 'WARN'
-                            }
-                        }
+                    $spnResult = Register-ShareMigAliasSpns -CifsServerName $cifsName -Aliases $aliases -Domain $destDomain -DomainController $spnDc -Credential $spnCred
+                    if (-not $spnResult.Success) {
+                        Write-ShareMigLog "Stopping migration before share import because automatic SPN registration did not complete." 'ERROR'
+                        return
                     }
                 } else {
                     Write-ShareMigLog "--- ACTION REQUIRED: Register SPNs for NetBIOS aliases ---" 'WARN'
                     foreach ($alias in $aliases) {
-                        Write-ShareMigLog "  SETSPN -a host/$alias $cifsName" 'WARN'
-                        Write-ShareMigLog "  SETSPN -a host/$alias.$destDomain $cifsName" 'WARN'
+                        Write-ShareMigLog "  SETSPN -S HOST/$alias $cifsName" 'WARN'
+                        Write-ShareMigLog "  SETSPN -S HOST/$alias.$destDomain $cifsName" 'WARN'
                     }
                 }
             }
@@ -1718,7 +1821,7 @@ switch ($Mode) {
                 Start-ShareMigCifs @cifsParams
             } catch {
                 Write-ShareMigLog "CIFS create FAILED on $vserver — $($_.Exception.Message)" 'ERROR'
-                throw
+                return
             }
 
             # SPN registration for NetBIOS aliases
@@ -1727,21 +1830,16 @@ switch ($Mode) {
                     Write-ShareMigLog "--- Registering SPNs for NetBIOS aliases (via AD credential) ---" 'INFO'
                     $spnCred = [pscredential]::new($srcCredUser, (ConvertTo-SecureString $srcDomainPass -AsPlainText -Force))
                     $spnDc = @($shareMigConfig.ShareMigration.SourceDomainController)[0]
-                    foreach ($alias in $aliases) {
-                        foreach ($spn in @("host/$alias", "host/$alias.$srcDomain")) {
-                            try {
-                                Set-ADComputer -Identity $cifsName -Add @{servicePrincipalName = $spn} -Server $spnDc -Credential $spnCred -ErrorAction Stop
-                                Write-ShareMigLog "  SPN registered: $spn → $cifsName (DC: $spnDc)" 'PASS'
-                            } catch {
-                                Write-ShareMigLog "  SPN failed: $spn → $cifsName — $($_.Exception.Message)" 'WARN'
-                            }
-                        }
+                    $spnResult = Register-ShareMigAliasSpns -CifsServerName $cifsName -Aliases $aliases -Domain $srcDomain -DomainController $spnDc -Credential $spnCred
+                    if (-not $spnResult.Success) {
+                        Write-ShareMigLog "Stopping rollback before share import because automatic SPN registration did not complete." 'ERROR'
+                        return
                     }
                 } else {
                     Write-ShareMigLog "--- ACTION REQUIRED: Register SPNs for NetBIOS aliases ---" 'WARN'
                     foreach ($alias in $aliases) {
-                        Write-ShareMigLog "  SETSPN -a host/$alias $cifsName" 'WARN'
-                        Write-ShareMigLog "  SETSPN -a host/$alias.$srcDomain $cifsName" 'WARN'
+                        Write-ShareMigLog "  SETSPN -S HOST/$alias $cifsName" 'WARN'
+                        Write-ShareMigLog "  SETSPN -S HOST/$alias.$srcDomain $cifsName" 'WARN'
                     }
                 }
             }
@@ -1863,39 +1961,7 @@ switch ($Mode) {
 
             # Build credential
             $spnCred = [pscredential]::new($CredUser, (ConvertTo-SecureString $CredPass -AsPlainText -Force))
-
-            # Read existing SPNs from AD
-            try {
-                $adComputer = Get-ADComputer -Identity $cifsName -Server $DomainController -Credential $spnCred -Properties servicePrincipalName -ErrorAction Stop
-                $existingSPNs = @($adComputer.servicePrincipalName)
-                Write-ShareMigLog "[$Side] Existing SPNs on '$cifsName': $($existingSPNs.Count)" 'INFO'
-            } catch {
-                Write-ShareMigLog "[$Side] Could not read AD computer '$cifsName': $($_.Exception.Message)" 'ERROR'
-                return
-            }
-
-            # Register missing SPNs
-            $registered = 0
-            $skipped    = 0
-            $failed     = 0
-            foreach ($alias in $aliases) {
-                foreach ($spn in @("host/$alias", "host/$alias.$Domain")) {
-                    if ($existingSPNs -contains $spn) {
-                        Write-ShareMigLog "[$Side]   Already present: $spn" 'INFO'
-                        $skipped++
-                        continue
-                    }
-                    try {
-                        Set-ADComputer -Identity $cifsName -Add @{servicePrincipalName = $spn} -Server $DomainController -Credential $spnCred -ErrorAction Stop
-                        Write-ShareMigLog "[$Side]   Registered: $spn → $cifsName" 'PASS'
-                        $registered++
-                    } catch {
-                        Write-ShareMigLog "[$Side]   FAILED: $spn → $cifsName — $($_.Exception.Message)" 'ERROR'
-                        $failed++
-                    }
-                }
-            }
-            Write-ShareMigLog "[$Side] Summary: $registered registered, $skipped already present, $failed failed" 'INFO'
+            Register-ShareMigAliasSpns -CifsServerName $cifsName -Aliases $aliases -Domain $Domain -DomainController $DomainController -Credential $spnCred -LogPrefix "[$Side]" | Out-Null
         }
 
         # --- Source side ---

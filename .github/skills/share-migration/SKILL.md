@@ -33,12 +33,13 @@ Template: `Config_shareMig.template.json` — copy to `Config_shareMig.json` and
 | Field | Description |
 |-------|-------------|
 | `Domain` | Source AD domain FQDN (e.g., `SOURCE.DOMAIN.COM`) |
-| `DomainController` | Preferred DC hostname; blank = auto-discover |
-| `CredentialName` | Name in `credentials/` for domain admin password |
+| `SourceDomainController` / `DestinationDomainController` | DC IPs used for preferred-DC configuration and AD operations |
+| `SourceDomainCredentialName` / `DestinationDomainCredentialName` | Credential names in `credentials/` for each domain's admin account |
 | `SkipDFS` | `true` to disable all DFS operations (default) |
 | `CreateDestinationDFSLinks` | `true` to create widelinks on destination |
 | `GroupOuPath` | AD OU for new groups (e.g., `CN=Users,DC=SOURCE,DC=DOMAIN,DC=COM`) |
 | `GroupNamePrefix` | Prefix for auto-created groups (e.g., `ShareMig`) |
+| `AutoRegisterSPN` | `true` registers missing alias `HOST` SPNs after a successful CIFS join; ownership conflicts stop before share import |
 | `Preflight.Cluster` / `Preflight.Vserver` | Target for preflight test objects |
 | `Pairs[].SourceCluster` / `DestinationCluster` | Cluster alias or FQDN |
 | `Pairs[].SourceVserver` / `DestinationVserver` | SVM names |
@@ -62,6 +63,12 @@ Template: `Config_shareMig.template.json` — copy to `Config_shareMig.json` and
 # 4. Or do export + import in one pass
 .\scripts\share-migration\Invoke-ShareMigration.ps1 -Mode Sync
 
+# Reverse a failed domain migration
+.\scripts\share-migration\Invoke-ShareMigration.ps1 -Mode Rollback
+
+# Register missing alias SPNs for an existing source CIFS server
+.\scripts\share-migration\Invoke-ShareMigration.ps1 -Mode SetSPN -Target Source
+
 # Via Script Manager
 Start-ScriptManager              # GUI grid view
 Start-ScriptManager -Console     # Console numbered menu
@@ -72,7 +79,7 @@ sm -Filter "share"               # Pre-filter
 
 | Parameter | Description |
 |-----------|-------------|
-| `-Mode` | `Export`, `Import`, `Preflight`, or `Sync` |
+| `-Mode` | `Export`, `Import`, `Preflight`, `Sync`, `DomainMigration`, `Rollback`, `TestCredentials`, `ResetCifsPassword`, or `SetSPN` |
 | `-ShareMigrationConfigPath` | Override Config_shareMig.json path |
 | `-SnapshotPath` | Path to JSON snapshot (required for Import) |
 | `-DomainCredential` | PSCredential for AD operations (auto-loaded from config if omitted) |
@@ -106,6 +113,15 @@ sm -Filter "share"               # Pre-filter
 2. DC discovery + authentication
 3. Create/find test AD group
 4. Create/find test SMB share + apply test ACL
+
+### Automatic Alias SPNs
+After a successful CIFS join, `AutoRegisterSPN: true` derives `HOST/<alias>` and
+`HOST/<alias>.<domain>` from the live CIFS alias/configuration. It checks every
+SPN owner before any write, equivalent to `SETSPN -S`; an ownership conflict or
+registration failure stops the migration or rollback before share import.
+
+With `AutoRegisterSPN: false`, the workflow logs duplicate-safe `SETSPN -S`
+commands for manual execution instead.
 
 ## Dependencies
 - `NetApp.ONTAP` PowerShell module
