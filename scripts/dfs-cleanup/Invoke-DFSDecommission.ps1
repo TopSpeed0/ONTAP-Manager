@@ -1990,6 +1990,11 @@ function Remove-DFSTarget {
     Write-DFSLog "PHASE 2 — backing storage for '$($Row.DfsPath)' (method: $($Row.DeleteMethod))" 'STEP'
 
     $method = $Row.DeleteMethod
+    if ([string]::IsNullOrWhiteSpace($method)) {
+        Write-DFSLog ("  REFUSED: no DeleteMethod was classified for '$($Row.DfsPath)' (target was never " +
+                      "resolved — likely FullyGone). Refusing rather than fall through to a volume-level delete.") 'ERROR'
+        return
+    }
     $targetName = switch ($method) {
         'Qtree'     { $Row.Qtree }
         'Directory' { "$($Row.Volume)/$($Row.DeleteRelPath)" }
@@ -2029,7 +2034,7 @@ function Remove-DFSTarget {
                 $q = Get-NcQtree -Volume $Row.Volume -VserverContext $svm -ErrorAction SilentlyContinue |
                      Where-Object { $_.Qtree -eq $targetName }
                 if ($q) {
-                    $q | Remove-NcQtree -Force -Confirm:$false
+                    $q | Remove-NcQtree -Force -ZapiCall -Confirm:$false
                     Write-DFSLog "  Removed qtree '$targetName'." 'OK'
                 }
                 else {

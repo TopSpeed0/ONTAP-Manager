@@ -105,14 +105,13 @@ config.template.json         # Template for  users (tracked)
 Config_shareMig.template.json    # Share-migration template (tracked)
 Config_DFSCleanup.template.json  # DFS cleanup / FSA template (tracked)
 SKILL.md                   # Project-owned workspace skill index (Claude/Hermes canonical source)
-CLAUDE.md                  # Claude-specific entry layer; links to the workspace skill tree
+CLAUDE.md                  # Shared always-on instructions for Copilot and Claude
 Load-Config.ps1              # Central config loader — auto-generates functions
 Start-Docs.ps1               # One-liner: Python check + docs server + config load
 Push-Both.ps1                # Push public-clean to GitHub main + Bitbucket snapshot-sanitized in one step
 profile1.ps1                 # Workspace profile — modules + dot-sources Load-Config
 .github/
   agents/                    # Custom Copilot agents (@sanitizer, etc.)
-  copilot-instructions.md    # Agent instructions & conventions
   Netapp Cases/              # Curated NetApp support case summaries (KB)
   skills/                    # Domain skills loaded by the agent
 ansible/
@@ -384,11 +383,12 @@ See [ontap-cluster-info skill](.github/skills/ontap-cluster-info/SKILL.md) for t
 
 ## Personal Scripts Library
 
-Point the agent to your local scripts folder in `.github/copilot-instructions.md`. Existing modules like `Get-DFSNameSpaceRoot.psm1` and `Get-NcVolAvil.psm1` are loaded by `Load-Config.ps1`.
+Use the `Personal_modules` configuration setting for local script-library paths. Existing modules such as `Get-DFSNameSpaceRoot.psm1` and `Get-NcVolAvil.psm1` are loaded by `Load-Config.ps1`.
 
 ## See Also
 
-- Full agent instructions: [.github/copilot-instructions.md](.github/copilot-instructions.md)
+- Shared agent instructions: [CLAUDE.md](CLAUDE.md)
+- Workspace skill index: [SKILL.md](SKILL.md)
 
 ## Credential Store
 

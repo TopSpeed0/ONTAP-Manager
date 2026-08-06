@@ -85,3 +85,4 @@ scripts/snapshots/reports/
 # Old quota report (superseded by Clusters Quota Policy Manger.ps1)
 scripts/quota/Clusters Quota Reports (old).ps1
 Get-NI-DR-Report*.ps1
+scripts/dfs-cleanup/override-20260804.json
