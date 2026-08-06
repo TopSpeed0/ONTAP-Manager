@@ -12,8 +12,7 @@ This is the tracked, project-owned source of truth for the workspace-level skill
 | Layer | Existing source | Use it for |
 |---|---|---|
 | Workspace skill | `SKILL.md` | This trigger/index and the generic workspace orientation below. |
-| Claude entry | `CLAUDE.md` | Claude-specific shell and execution notes. |
-| Agent instructions | `.github/copilot-instructions.md` | Full PowerShell/ONTAP conventions, safety, credential, script-manager, Share Migration, Snapshot Comparison, and DFS Cleanup instruction blocks. |
+| Shared agent instructions | `CLAUDE.md` | Always-on PowerShell/ONTAP conventions, safety, credentials, and execution boundaries for Copilot and Claude. |
 | Public workspace guide | `README.MD` | Repository layout, quick start, scripts, skill links, and user-facing documentation. |
 | Documentation launcher | `Start-Docs.ps1` | Documentation-source verification and Docs Hub launch. |
 | Domain skill tree | `.github/skills/<name>/SKILL.md` | Capability-specific instructions and references. |
@@ -93,4 +92,4 @@ Schema: see `config.template.json` (tracked). First run auto-copies template to 
 
 ## Safety
 
-Read the existing safety blocks in `.github/copilot-instructions.md` and the matching domain skill before any state-changing operation. Never bypass the DFS Cleanup verdict/approval gates, and always obtain explicit confirmation before destructive ONTAP operations.
+Follow the shared safety rules in `CLAUDE.md` and the matching domain skill before any state-changing operation. Never bypass the DFS Cleanup verdict/approval gates, and always obtain explicit confirmation before destructive ONTAP operations.

@@ -16,7 +16,6 @@ $documentationSources = @(
     'CLAUDE.md',
     'README.MD',
     'docs\index.html',
-    '.github\copilot-instructions.md',
     '.github\skills\share-migration\SKILL.md',
     '.github\skills\dfs-cleanup\SKILL.md',
     '.github\skills\snapshot-comparison\SKILL.md',
