@@ -151,7 +151,7 @@ Do not enable locking implicitly from a preservation script. Enabling `snapshot-
 After the volume is explicitly approved and locking is enabled, the expiry operation is conceptually:
 
 ```text
-volume snapshot modify-snaplock-expiry-time -vserver <svm> -volume <volume> -snapshot <final-name> -snaplock-expiry-time "<expiry>"
+volume snapshot modify-snaplock-expiry-time -vserver <svm> -volume <volume> -snapshot <final-name> -expiry-time "<expiry>"
 ```
 
 Verify the resulting `snaplock-expiry-time` and document that the snapshot cannot be deleted, including by an administrator, until that expiry. Never choose "as long as possible" without checking free capacity and expected change rate.
