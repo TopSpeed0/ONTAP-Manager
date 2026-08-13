@@ -31,6 +31,7 @@ Read the matching project-local domain skill before acting on a capability:
 - [Share Migration](.github/skills/share-migration/SKILL.md)
 - [SnapMirror Management](.github/skills/snapmirror-management/SKILL.md)
 - [Snapshot Comparison](.github/skills/snapshot-comparison/SKILL.md)
+- [Snapshot Preservation](.github/skills/snapshot-preservation/SKILL.md)
 - [SVM-DR](.github/skills/svm-dr/SKILL.md)
 - [SVM Management](.github/skills/svm-management/SKILL.md)
 - [Volume Management](.github/skills/volume-management/SKILL.md)

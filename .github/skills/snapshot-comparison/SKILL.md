@@ -184,6 +184,4 @@ this workspace with a `-Cluster` parameter is exposed to the same bug.**
 
 ## Safety
 
-Read-only. Nothing here deletes a snapshot. If the user wants to act on a candidate list,
-treat that as a separate task, confirm the specific snapshots, and check `Locked` /
-`LockReason` first — see the `volume-management` skill for `snapshot autodelete` semantics.
+Read-only. Nothing here deletes, renames, modifies, locks, or restores a snapshot. If the user wants to preserve a snapshot, treat that as a separate state-changing workflow and load [Snapshot Preservation](../snapshot-preservation/SKILL.md). Confirm the specific snapshot, check `Locked` / `LockReason` first, and follow its policy-rotation, autodelete, SnapMirror, and SnapLock gates. For `snapshot autodelete` semantics, also consult the `volume-management` skill.
