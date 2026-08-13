@@ -128,7 +128,23 @@ SnapLock snapshot locking is the only control in this workflow that provides tru
 - ONTAP 9.12.1 or later for the supported snapshot-locking workflow.
 - SnapLock licensing/entitlement on the cluster.
 - The target volume has `snapshot-locking-enabled=true`.
+- The SnapLock Compliance Clock is configured/running on every relevant node.
 - A deliberately chosen expiry based on business recovery need and aggregate/volume capacity.
+
+Check the clock before touching the volume setting:
+
+```text
+set -privilege advanced
+snaplock compliance-clock show
+```
+
+If a node reports `ComplianceClock is not configured`, stop. Compliance Clock initialization is a separate cluster-level change. First verify that the node dates are correct and aligned, then have an authorized operator initialize the affected node using the ONTAP command supported by the release:
+
+```text
+snaplock compliance-clock initialize -node <node>
+```
+
+Run `snaplock compliance-clock show` again and require a configured/running clock on every relevant node before enabling snapshot locking. Never set the system date manually to influence the Compliance Clock, and never treat the initialization as a reversible per-snapshot operation.
 
 Do not enable locking implicitly from a preservation script. Enabling `snapshot-locking-enabled` is a volume-wide change and should be a separate reviewed change with a rollback/capacity plan. Existing snapshots and operational behavior must be understood first.
 
