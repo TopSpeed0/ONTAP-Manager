@@ -17,6 +17,35 @@ This is the tracked, project-owned source of truth for the workspace-level skill
 | Documentation launcher | `Start-Docs.ps1` | Documentation-source verification and Docs Hub launch. |
 | Domain skill tree | `.github/skills/<name>/SKILL.md` | Capability-specific instructions and references. |
 
+## Working directory — resolve it first, never hardcode it
+
+**Every path in this file and in the domain skills is relative to the workspace root** — the directory containing `profile1.ps1`, `Load-Config.ps1` and `config.json`. Clone location varies per user, so discover it rather than assuming it:
+
+```powershell
+$workspace =
+    if ($env:NETAPP_WORKSPACE) { $env:NETAPP_WORKSPACE }                     # 1. explicit override
+    elseif ($ws = git rev-parse --show-toplevel 2>$null) { $ws }             # 2. anywhere inside the repo
+    elseif ($PSScriptRoot) { $PSScriptRoot }                                 # 3. a script in the repo root
+    else { throw 'Set $env:NETAPP_WORKSPACE to the workspace root.' }
+
+Set-Location $workspace
+```
+
+Set the override once per machine if agents will start outside the repo:
+
+```powershell
+[Environment]::SetEnvironmentVariable('NETAPP_WORKSPACE', (git rev-parse --show-toplevel), 'User')
+```
+
+Do this **before** reading a domain skill, dot-sourcing `profile1.ps1`, or listing the tree. Two reasons it matters:
+
+- The canonical agent skill file (`workspace-netapp-code/SKILL.md` under the agent's skills directory) is normally a **symlink into this repository**. An agent that starts elsewhere resolves `.github/skills/...`, `KnownIssues/...` and `scripts/...` against the wrong root and reports them missing. If neither the env var nor git is available, resolve the symlink instead: `(Get-Item <skill-path>).Target | Split-Path -Parent`.
+- `Load-Config.ps1` reads `config.json` from `$rootDir` (defaulting to `$PSScriptRoot`), so a wrong working directory silently triggers the template auto-copy path.
+
+Scripts inside the repo already self-locate via `$PSScriptRoot` and need none of this. `config.json` also accepts an optional `WorkspaceRoot` key for external automation that is handed the config path directly — but note the chicken-and-egg: it cannot be used to *find* the workspace, only to confirm it.
+
+The PowerShell tool resets the working directory between calls, so re-resolve or use absolute paths in each new call.
+
 Read the matching project-local domain skill before acting on a capability:
 
 - [DFS Cleanup](.github/skills/dfs-cleanup/SKILL.md)
@@ -74,7 +103,8 @@ Schema: see `config.template.json` (tracked). First run auto-copies template to 
 ## Knowledge base
 
 - `KnownIssues/` (tracked) — sanitized, generic case articles. **Search first.**
-- `.github/Netapp Cases/` (gitignored) — raw personal case summaries. Search when KnownIssues has no match.
+- `.github/Netapp Cases/` (gitignored) — raw personal case summaries with real hostnames/IPs. Search when KnownIssues has no match.
+- `.github/skills/ontap-cluster-info/references/ontap-observability-gotchas.md` — **read before promising historical evidence.** Measured REST metric retention windows, EMS retention, and the traps that waste the most time (deprecated `v3-tcp-max-*` values, FlexClone move splits, QoS `Is Shared`, latency-component breakdown).
 - `PDF/` — official ONTAP 9 documentation
 
 ## Other components

@@ -1,5 +1,7 @@
 {
   "_comment": "Copy this file to config.json and fill in your values. config.json is gitignored.",
+  "_comment_WorkspaceRoot": "Optional. Absolute path to this workspace root, for external automation that is handed this config file directly. It cannot be used to FIND the workspace (chicken-and-egg) - prefer $env:NETAPP_WORKSPACE or `git rev-parse --show-toplevel`. Leave empty to ignore.",
+  "WorkspaceRoot": "",
   "Docs_Port": 8080,
   "NDMP_Config": {
     "BackupUser": "backupuser",

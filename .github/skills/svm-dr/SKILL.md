@@ -236,6 +236,10 @@ After a disaster is resolved and you want to reactivate the original source:
 | *"contains either an object store server, policy, user or bucket"* | Leftover S3/object-store config on source SVM | Delete S3 users, policies, buckets, server (see Step 0) |
 | *"Vserver peer relationship does not exist"* | Peer auto-accepted, no manual accept needed | Check `vserver peer show` — may already be `peered` |
 | *"SVM-DR relationship not supported because they are on the same cluster"* | Same-name SVMs confuse ONTAP about source/dest | Use peer local-name in `-source-path` (see Step 2) |
+| *"Unable to generate baseline for table sis"* | Orphaned destination volumes that no longer map to a source volume (often carry an MSID numeric suffix, e.g. `<vol><msid>`) | Full verified procedure: [KnownIssues — table sis](../../../KnownIssues/svmdr-resync-fails-unable-to-generate-baseline-table-sis.md). `snapmirror resync` names the offending volumes for you — you do **not** need the CRS mlog. |
+| *"operation status is Aborting / Transferring"* when trying to `break` | `snapmirror abort` does not stop the schedule; the next scheduled transfer starts within seconds | `snapmirror modify -destination-path <path> -schedule ""` first, then `quiesce`, then `break`. **Restore the schedule afterwards** or DR silently stops updating. |
+
+**Before promising historical evidence for an SVM-DR incident**, read [ONTAP observability gotchas](../ontap-cluster-info/references/ontap-observability-gotchas.md) — EMS retains only ~11–14 hours and REST metrics reach back 30 days at best.
 
 ## Real-World Example: <svm-name> (<cluster-name> → <cluster-name>)
 

@@ -1202,6 +1202,23 @@ function Add-DFSAnalysis {
 
     if (-not $Row.Resolved -or -not $Row.Volume) {
         & $add 'VerdictReasons' 'Target not resolved — nothing to analyze.'
+
+        # An unresolvable row is not a row with nothing to say. The resolver has usually already
+        # determined OrphanState=FullyGone, and the tracker columns are precisely what records
+        # that: Status becomes GONE, ClusterCheck says why, and AutoNotes labels the frozen
+        # Share / On Volume / Qtree / Size cells as the historical record of what was removed.
+        #
+        # Returning without computing them left those cells holding whatever the last successful
+        # run wrote — forever. The writer leaves a $null cell alone by design (see the column
+        # ownership rules on Update-DFSTrackerWorksheet), so a stale value outlived the object it
+        # described: '\\<ns>\dfs\<link>' still read Status=EMPTY, Share=<link>$, Qtree=<link>_Q long after
+        # all three were confirmed absent from the cluster at share, qtree and path level.
+        #
+        # The GONE branch in Add-DFSTrackerFields was already correct. It was simply unreachable
+        # for the rows that needed it most, because "fully gone" implies "not resolved", which
+        # implies this early return. Volume and Analytics are $null here and that is safe: every
+        # measurement column keys off $isGone and yields $null, which preserves history.
+        $null = Add-DFSTrackerFields -Context $Context -Row $Row -Volume $null -Analytics $null
         return $Row
     }
 
@@ -1897,7 +1914,7 @@ function Remove-DFSTarget {
             Write-DFSLog "  $($Row.SymlinkFileCount) symlink files route to this one widelink — all will be removed: $($Row.SymlinkFilePath)" 'WARN'
         }
         # SSH goes to the CLUSTER management name, not to a node. Node names such as
-        # '<cluster>-01' are cluster-internal and generally do not resolve in DNS — connecting to
+        # e.g. '<cluster>-01' are cluster-internal and generally do not resolve in DNS — connecting to
         # one produced 'No such host is known' and left the file behind. ClusterAlias is the same
         # name Connect-NcController already used successfully, so it is known to resolve.
         #
