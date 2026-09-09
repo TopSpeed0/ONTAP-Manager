@@ -28,6 +28,11 @@ scripts/dfs-cleanup/Script-4-Human.ps1
 scripts/dfs-cleanup/Test-NaCyberArkAuth.ps1
 scripts/Install-AgentSkillLinks.ps1
 
+# Ad-hoc three-layer existence probe (share / qtree / path-in-volume) used to confirm by hand
+# that a tracker row really is gone from the cluster. Hardcodes a personal workspace path and a
+# hand-picked candidate-volume list, so it is a local diagnostic, not a supported entry point.
+scripts/dfs-cleanup/Test-DFSExistenceProbe.ps1
+
 # Generated HTML (loads from config.json — not for git)
 *.html
 # Exception: docs hub SPA is tracked (cluster data injected at runtime from config.json)
