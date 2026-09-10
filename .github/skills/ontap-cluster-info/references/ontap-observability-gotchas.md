@@ -152,3 +152,62 @@ Activation requires an explicit `vserver start`. This matters for `identity-pres
 ## 12. Cluster timezone vs API timezone
 
 ONTAP CLI output is in the cluster's configured timezone (`cluster date show`), while the REST metrics API returns UTC. When correlating CLI timestamps, log files and API series in one table, convert once and state which zone the table is in.
+
+## 13. `sis-space-saved` does not report Auto Adaptive Compression — a volume can look 0% and be saving 2.9:1
+
+On AFF, the inline compression that actually does the work is **Auto Adaptive Compression**. It is
+accounted for in the volume's *footprint*, not in the SIS counters. `volume efficiency show` and the
+`sis-space-saved*` / `compression-space-saved*` fields cover **volume-level dedupe and compression
+only**, so a volume carrying heavy AAC savings reports zero.
+
+Measured case, an Oracle archive-log volume:
+
+```
+volume show -volume <vol> -fields sis-space-saved,sis-space-saved-percent,compression-space-saved
+    sis-space-saved           39.26MB
+    sis-space-saved-percent   0%
+    compression-space-saved   0B         <-- reads as "efficiency is doing nothing here"
+```
+
+The same volume, asked properly:
+
+```
+volume show-footprint -vserver <svm> -volume <vol>
+    Volume Data Footprint                                  1.75TB
+    Total Footprint                                        1.82TB
+    Footprint Data Reduction by Auto Adaptive Compression  1.21TB     <-- ~2.9:1
+    Total Deduplication Footprint                          10.08GB
+    Effective Total after Footprint Data Reduction         625.6GB
+```
+
+Dedupe really was worthless on that data (10 GB of footprint, 39 MB saved). Compression was saving
+**1.21 TB**. Acting on the first output alone would disable compression on a volume where it returns
+almost 3:1, and the volume would then grow roughly three times faster with no warning: existing
+blocks are not rehydrated, so the loss appears only in new writes, weeks later.
+
+**Rule: never conclude a volume saves nothing from `volume efficiency show`.** Check
+`volume show-footprint` and read `Footprint Data Reduction by Auto Adaptive Compression` before
+turning anything off. Aggregate-wide the same split shows in
+`aggr show-efficiency -aggregate <aggr>`, where `Volume Compression Savings ratio` counts only the
+SIS path and can sit near 1.03:1 while AAC is doing multiples of that underneath.
+
+### SnapMirror destinations: settings are shown, efficiency state is `Disabled`, AAC still applies
+
+A DP destination reports `state: Disabled` because efficiency *operations* cannot run while it is a
+destination, yet its settings stay populated and compression is still applied to what arrives:
+
+```
+volume efficiency show -vserver <dest-svm> -volume <vol> \
+    -fields state,compression,inline-compression,storage-efficiency-mode,inline-dedupe
+    state                    Disabled
+    compression              true
+    inline-compression       true
+    storage-efficiency-mode  efficient
+    inline-dedupe            false
+```
+
+So there is nothing to "also run" on the destination after changing efficiency on the source, and
+attempting it is rejected. Confirm the destination is benefiting with `show-footprint` on that copy
+instead. In the measured case the destination reported **780.9 GB** of AAC savings against the
+source's 1.21 TB on an identical 1.82 TB footprint. The two copies differ because of snapshot block
+sharing, not because compression behaves differently.
