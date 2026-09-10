@@ -54,6 +54,40 @@ CRS builds a configuration baseline table-by-table. When it reaches the `sis` (s
 
 The baseline never completes, so every update fails at the config stage while the data constituents remain individually healthy.
 
+### What creates the orphans in the first place
+
+Both NetApp KBs list the cause as "still under investigation". One reproducible trigger has now been
+observed directly: **creating a FlexClone on a source SVM that is itself protected by SVM-DR.**
+
+A FlexClone is a new volume on the protected SVM. SVM-DR has to replicate that creation. When the
+replication of the *creation* does not complete cleanly, the destination is left holding volumes that
+map to nothing, which is exactly the state the `sis` baseline loop needs.
+
+The fingerprint is a tight timestamp correlation. Compare three things:
+
+```
+volume clone show -vserver <protected-svm> \
+    -fields volume,parent-vserver,parent-volume,parent-snapshot,split-estimate
+
+volume snapshot show -vserver <protected-svm> -volume <parent-volume> \
+    -fields snapshot,create-time,owners        # the clone's parent snapshot is tagged owners: "volume clone"
+
+snapmirror show -destination-path <DR-SVM>: -fields unhealthy-reason,last-transfer-error
+```
+
+In the observed case the clone's parent snapshot was created at **12:17:53** and the SVM-DR
+relationship went unhealthy at **12:15** the same day. Three clones were created; three orphans
+appeared on the destination, carrying **the same names**, two of them with the volume MSID appended.
+
+Two practical consequences:
+
+- **Prefer cloning from the replica, not from the protected source.** If a SnapMirror or SVM-DR copy
+  of the parent already exists on another SVM, clone there. It keeps new volumes off the protected
+  SVM entirely.
+- **If you must clone on a protected SVM, check the relationship afterwards.** A single
+  `snapmirror show -fields state,status,healthy,lag-time` immediately after the clone completes
+  turns a silent 3-week outage into a same-day fix. Nothing alerts on this by default.
+
 ## Diagnosis — you do NOT need the CRS mlog
 
 Both NetApp KBs direct you to `/etc/log/mlog/crs.log` or `CRS-MLOG-TXT.GZ` from an AutoSupport bundle to identify the offending volume. In practice:
@@ -148,6 +182,31 @@ snapmirror show -destination-vserver <DR-SVM> -expand -fields destination-path,s
 ```
 
 Correct mapping is itself a success signal: the destination names come back **without** the numeric suffixes.
+
+**Progress is not monotonic, and a flat count is not a stall.** Measured over a two-hour resync,
+polling every 10 minutes:
+
+```
+13:47  Snapmirrored=37  Transferring=17  Idle=17  Broken-off=1
+13:57  Snapmirrored=37  Transferring=6   Idle=29  Broken-off=1
+14:17  Snapmirrored=37  Transferring=4   Idle=33  Broken-off=1
+14:27  Snapmirrored=37  Transferring=3   Idle=34  Broken-off=1
+   ...  Transferring oscillates 2-3 for over an hour while the large volumes finish ...
+15:47  Snapmirrored=38  Transferring=0   Idle=38  Broken-off=0   <- flips in one step
+```
+
+The top-level relationship stays `Broken-off` / `Transferring` for the whole run and flips to
+`Snapmirrored` / `Idle` only when the last constituent lands. Do not intervene because the count
+stopped falling.
+
+Sizing, from the same run: **2.56 TB in 2 h 02 m 37 s**, about 356 MB/s sustained. That matched the
+sum of `size`/`used` on the deleted volumes' sources beforehand, so
+`volume show -vserver <source-svm> -volume <name> -fields size,used` is a reliable pre-flight
+estimate of the transfer you are about to incur.
+
+Lag time at completion reflects age-since-common-snapshot and will still look large while the last
+constituents are transferring. It clears on the next scheduled update, not at the moment the resync
+finishes.
 
 ## Safety facts worth knowing before you start
 
