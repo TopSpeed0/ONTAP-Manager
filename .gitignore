@@ -91,3 +91,8 @@ scripts/snapshots/reports/
 scripts/quota/Clusters Quota Reports (old).ps1
 Get-NI-DR-Report*.ps1
 scripts/dfs-cleanup/override-20260804.json
+
+# Real-value companions to the tracked, placeholder skill files (same convention as
+# scripts/dfs-cleanup/Script-4-Human.ps1). Carry real domain, OU, account and cluster
+# names so the blocks are copy-paste ready - which is exactly why they stay local.
+.github/skills/**/NOTES-local.md
