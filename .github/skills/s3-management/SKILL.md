@@ -256,6 +256,31 @@ curl -k -u '<username>:<password>' -X DELETE "$BASE/groups/$GRP_ID"
 
 **SnapMirror S3 path syntax**: `svm_name:/bucket/bucket_name` (different from SVM-DR colon-only syntax!)
 
+#### SnapMirror S3 — network path and the only health checks that work
+
+> **Read first if replication "looks fine" but the destination is not changing:** [KnownIssues/snapmirror-s3-silent-stop-intercluster-route.md](../../../KnownIssues/snapmirror-s3-silent-stop-intercluster-route.md)
+
+- **Status is not health.** For a continuous policy, the source always shows `Transferring` / `Healthy: false`, the destination shows `Idle`, and every transfer, lag and error field is `-`. That is normal (NetApp KB). Do not chase it, and do not treat it as proof that replication works either.
+- **Traffic path:** admin-SVM **intercluster LIFs → remote S3 data LIF** over HTTPS (same-cluster too). If the S3 LIF is in another subnet, the admin SVM needs a route to it through the intercluster gateway.
+- **Use /32 host routes, never a subnet-wide route.** A `/24` route through the intercluster gateway also captures cluster-mgmt replies to every other host in that /24. That's asymmetric routing: the firewall logs `incomplete` / `aged-out`, and REST clients fail against that one cluster.
+- **Firewall:** TCP 22, 443, 9443, 11104, 11105 **and ICMP**, both directions, between the intercluster subnet and the S3 LIFs.
+- **Never regenerate the root user keys** on a protected SVM. SnapMirror S3 authenticates with them.
+
+```powershell
+# Real health check — run all three
+<cluster-ssh> -Command "snapmirror show -policy-type continuous -fields status"                       # docs' verify command
+<cluster-ssh> -Command "vserver object-store-server bucket show -vserver <svm> -fields object-count,logical-used"   # both sides, twice, minutes apart
+<cluster-ssh> -Command "network ping -vserver <admin_svm> -lif <each_ic_lif> -destination <remote_s3_lif_ip>"    # every IC LIF, not cluster_mgmt
+
+# The route that keeps it alive (one per remote S3 LIF, on each side)
+<cluster-ssh> -Command "network route create -vserver <admin_svm> -destination <remote_s3_lif_ip>/32 -gateway <ic_gateway> -metric 5"
+
+# Who touched routing, and when (audit log keeps months; EMS ~12 h)
+<cluster-ssh> -Command "security audit log show -input *route*create*|*route*delete* -fields timestamp,username,input,state"
+```
+
+To find **which** objects did not replicate and **when** it stopped, diff the buckets. See [s3-client-operations.md](./references/s3-client-operations.md#diff-two-buckets-and-date-the-replication-cutoff).
+
 ### S3 Snapshots (ONTAP 9.16.1+)
 ```powershell
 # Create manual snapshot
@@ -397,6 +422,13 @@ $resp = Invoke-RestMethod -Method POST -Uri "https://<cluster>/api/protocols/s3/
 | REST API policy creation: `"bucket-a" is not valid for field "-resource"` | ONTAP validates that the bucket name exists when creating a policy via REST API. Non-existent bucket names are rejected. | Use real existing bucket names in the `resources` array. `"*"` (all buckets) always works. |
 | REST API group DELETE returns `"invalid value for field id"` | Group DELETE endpoint uses numeric `id`, not the group name. | `GET .../groups` first to get the numeric `id`, then `DELETE .../groups/{id}`. |
 | `User is not authorized` via Ansible on cluster mgmt LIF | SVM-scoped user (e.g. `svm_s3_dev`) accessing cluster mgmt LIF — `vsadmin` role may lack REST access | Verify `security login rest-role show -vserver <svm> -role vsadmin -api /api/protocols/s3/*`. Use SVM mgmt LIF with `default-management` instead. |
+| SnapMirror S3 shows `Transferring`, `Healthy: false`, all transfer fields `-` | **Normal** for continuous policy (NetApp KB); destination shows `Idle` | Judge health by bucket object-count drift + IC-LIF ping to the remote S3 LIF, not by `healthy` |
+| Destination bucket frozen, no EMS, no error | Admin-SVM route from intercluster subnet to the remote S3 LIF missing/deleted | `/32` route per remote S3 LIF via the IC gateway, metric 5 — see [KnownIssue](../../../KnownIssues/snapmirror-s3-silent-stop-intercluster-route.md) |
+| One cluster's REST API fails only from one client subnet; firewall logs `incomplete`/`aged-out` | Admin-SVM route covers that client subnet via a non-mgmt gateway, so replies are asymmetric | Narrow that route to `/32` host routes for the hosts that really need it |
+| All PutObject/CopyObject/tagging return 503 "Reduce your request rate" in <1 ms, GET/LIST/DELETE OK | **Unresolved.** Ruled out: inode limit, space, snapshots, QoS, config change, the ONTAP 9.8 multipart KB (doesn't apply to 9.9+). Suspected: SnapMirror S3 backlog | Measure per-op response codes with a `statistics` sample on `object_store_server` (see observability gotchas). Check for a stalled SnapMirror S3 relationship first |
+| `wafl.zombie.susp.vol.limit` on every FlexGroup constituent | Mass deletion (e.g. ~100M leftover multipart parts) is being reclaimed in the background, and WAFL throttles while that runs | Pause bulk deletes and heavy writes. Delete in batches. It's **NOTICE** severity, so it's hidden by default in `event log show` |
+| Source bucket uses ~145 files per object vs ~2 on the destination | Orphaned multipart parts and app metadata on the source. Only completed objects replicate | Abort stale multipart uploads (`ListMultipartUploads` / `AbortMultipartUpload`); a lifecycle rule `AbortIncompleteMultipartUpload` only prevents new build-up |
+| `. .\Ps.cred` does nothing | PowerShell won't dot-source a non-`.ps1` file | `Invoke-Expression (Get-Content .\Ps.cred -Raw)` |
 | Ansible `OSError: [WinError 1] Incorrect function` | Ansible doesn't support Windows as control node — `check_blocking_io()` uses POSIX-only `os.get_blocking()` | Use WSL: `wsl -d Ubuntu-22.04` |
 | WSL can't reach cluster IPs (10.x.x.x) | WSL2 NAT can't route to corporate subnets | Add `[wsl2]\nnnetworkingMode=mirrored` to `C:\Users\<you>\.wslconfig`, then `wsl --shutdown` |
 

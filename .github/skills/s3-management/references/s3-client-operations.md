@@ -154,6 +154,39 @@ Creates test objects on source endpoint, waits for replication, then verifies ob
 #### `test_s3_header_issue.py` — SigV4 Header Bug Reproducer
 Python script using raw `botocore` SigV4 signing. Sends requests with and without `x-amz-content-sha256` header to prove ONTAP returns HTTP 500 when the header is missing. Prompts for endpoint, access key, secret key, and bucket name.
 
+## Diff Two Buckets and Date the Replication Cutoff
+
+Use this for "the destination is N objects behind — which ones, and since when?". It's measured on ~1.1M objects per side: **about 2 minutes per listing**.
+
+**Do not page with `--max-items` / `--starting-token` in a loop** (as `compare-s3-buckets.ps1` does). That launches one `aws` process per 1,000 keys, about 2,200 processes for a 1.1M-object pair. Let the CLI paginate internally, and dump to a file once:
+
+```powershell
+$env:PYTHONWARNINGS = "ignore"
+# One call per side; the CLI follows continuation tokens itself
+aws s3api list-objects-v2 --bucket <bucket> --endpoint-url https://<src-endpoint> --profile src --no-verify-ssl `
+    --page-size 1000 --query "Contents[].[Key,LastModified,Size]" --output text > src_objects.tsv
+aws s3api list-objects-v2 --bucket <bucket> --endpoint-url https://<dst-endpoint> --profile dst --no-verify-ssl `
+    --page-size 1000 --query "Contents[].[Key,LastModified,Size]" --output text > dst_objects.tsv
+
+# Top-level layout first (cheap) — tells you whose data it is
+aws s3api list-objects-v2 --bucket <bucket> --endpoint-url https://<endpoint> --profile src --no-verify-ssl --delimiter "/" --query "CommonPrefixes[].Prefix" --output text
+```
+
+Then load both into `Dictionary[string,object]` (a 1.2M initial capacity avoids rehashing), diff by key, and group the differences by **top-level prefix** and **LastModified day**:
+
+| Result | Meaning |
+|---|---|
+| Source-only objects all **newer** than the newest destination object | Replication **stopped** at that timestamp. Look in the audit log at that minute |
+| Destination-only objects all **older** than that timestamp | Deletes made on the source after the stop that never replicated. Expected, and they clear when replication resumes |
+| Source-only objects spread across all dates | Selective failure (permissions, object size, key names). Not a transport outage |
+| Same key, different size | Overwrite not replicated yet |
+
+Gotchas:
+- The `object-count` from ONTAP and the S3 listing differ by ~100 (in-flight / multipart). Don't chase exact equality.
+- Use a hash set for "only on X" lists. `$array += $item` is O(n²) and stalls at tens of thousands of keys.
+- The destination SVM needs its **own** root keys (different from the source's). A `dst` profile that just copies the source key fails with `InvalidAccessKeyId`.
+- `Ps.cred` is not `.ps1`, so dot-sourcing it silently does nothing. Load it with `$profileSrc='src'; $profileDst='dst'; Invoke-Expression (Get-Content .\Ps.cred -Raw)`.
+
 ## Bucket Cleanup Guide
 
 ### Problem

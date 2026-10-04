@@ -21,6 +21,8 @@ argument-hint: 'Specify operation (create, break, resync, status) and source/des
 - Initialization performs a baseline transfer of all data blocks
 - Updates are asynchronous per schedule; each update creates snapshot → transfers delta
 - Peering requires intercluster LIFs, ports 11104/11105 open, TLS 1.2+ encryption
+- **SnapMirror S3 (continuous policy, `<svm>:/bucket/<name>`) is different.** The source always shows `Transferring` / `Healthy: false` and the destination shows `Idle`, so `healthy`, lag and transfer fields are useless. Check bucket object-count drift plus a ping from **every intercluster LIF** to the remote S3 data LIF. The relationship never reports a broken network path. See [KnownIssues/snapmirror-s3-silent-stop-intercluster-route.md](../../../KnownIssues/snapmirror-s3-silent-stop-intercluster-route.md) and the [S3 skill](../s3-management/SKILL.md)
+- Admin-SVM routes through the intercluster gateway must be **/32 host routes**. A subnet-wide route also redirects cluster-mgmt replies to every other host in that subnet (asymmetric routing behind a stateful firewall)
 - For detailed reference, see [ONTAP 9 SnapMirror Reference](./references/snapmirror-ontap-reference.md)
 
 ## Procedure

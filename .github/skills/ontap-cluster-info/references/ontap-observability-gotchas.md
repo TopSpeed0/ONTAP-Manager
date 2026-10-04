@@ -211,3 +211,58 @@ attempting it is rejected. Confirm the destination is benefiting with `show-foot
 instead. In the measured case the destination reported **780.9 GB** of AAC savings against the
 source's 1.21 TB on an identical 1.82 TB footprint. The two copies differ because of snapshot block
 sharing, not because compression behaves differently.
+
+## 14. `event log show` hides NOTICE and below — and the CLI ring is ~4,096 entries
+
+Without `-severity *` (at diagnostic privilege), `event log show` returns only **ERROR and above**. On a busy A1K pair that hid `wafl.zombie.susp.vol.limit` (NOTICE, fired 384 times in 12 h on every FlexGroup constituent) and `fg.heurist.squelch.changed` (NOTICE, 655 times). Both were central to the incident.
+
+```
+set -privilege diagnostic
+event log show -severity * -time >"10/04/2026 00:00:00" -fields time,node,severity,message-name,event
+event log show -severity * -message-name wafl.zombie.susp.vol.limit
+```
+
+- The retained window was **4,096 entries ≈ 12.5 h** at all severities. Same conclusion as gotcha 3: export immediately, or trigger an AutoSupport.
+- Range syntax is `-time "MM/DD/YYYY HH:MM:SS".."MM/DD/YYYY HH:MM:SS"`, with **no spaces around `..`**. With spaces, it fails with "Must have values on either side of '..'".
+- `-message-name a*|b*` patterns combined with `-severity *` sometimes return nothing. Dump the window to a file and grep it locally instead.
+
+## 15. The audit log is the change history — it keeps months, EMS keeps hours
+
+`security audit log show` retained **two months** (from early August to October) on the same cluster where EMS kept 12 hours. It records CLI (ssh), REST/System Manager (http, including the request body), ONTAPI and SNMP. For "what changed before it broke", use the audit log, not EMS.
+
+```
+security audit log show -input *route*create*|*route*delete* -fields timestamp,node,application,username,input,state
+security audit log show -timestamp "Tue Sep 15 15:30:00 2026".."Tue Sep 15 18:30:00 2026" -fields timestamp,application,username,input,state
+```
+
+- The filter is `-input`. `-command-pattern` does not exist.
+- REST changes are logged with the **object UUID, not the name**. Searching `*<volname>*` misses `PATCH /api/storage/volumes/<uuid>`.
+- Every command is logged twice, as `Pending` then `Success`. Filter out `Pending`.
+- In the measured case, the decisive line (`network route delete ...`) matched the replication stop time to **5 seconds**.
+
+## 16. S3 per-operation response codes — use a statistics sample (there is no `-raw`)
+
+`statistics show -object object_store_server -raw` is invalid. Take a short sample instead. It's the only way to prove, for example, "every PUT gets 503 while GET gets 200" from the storage side.
+
+```
+set -privilege advanced
+statistics start -object object_store_server -sample-id s3chk
+# wait 30–60 s
+statistics show -sample-id s3chk        # look at *_response_status_codes, *_total, *_failed, latency histograms
+statistics stop -sample-id s3chk
+statistics samples delete -sample-id s3chk
+```
+
+A rejection in **under 1 ms** (`put_object_process_time_histogram` all in `<600us`) at a low request rate means a policy- or state-level refusal, not overload. The counters are per S3 server instance; check `node_name`.
+
+## 17. CLI field names that look right but are rejected (9.16.1)
+
+| Tried | Error | Use |
+|---|---|---|
+| `volume show -fields style-extended` | invalid argument | `volume-style-extended` |
+| `volume show -fields is-fenced` / `uuid` / `instance-uuid` | invalid argument | `-instance` and read the fields, or REST |
+| `bucket show -fields incomplete-multipart-upload-count` / `role` | invalid argument | `bucket show -instance` (advanced) |
+| `security certificate show -fields subject-alternative-name` | invalid argument | Pull the cert over TLS and read the SAN extension client-side |
+| `network interface show -service-policy default-intercluster` on a cluster with custom policies | no entries | List all admin-SVM LIFs; intercluster LIFs may use `custom-system-*` policies |
+
+When a script flags failures by matching `Error:` in output, note that `snapmirror show -instance` contains the field labels `Transfer Error:` and `Last Transfer Error:`. Match `^Error:` or `is not a recognized`/`invalid argument` instead.
