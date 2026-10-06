@@ -59,7 +59,7 @@ WAFLREMOTE_EXCEPTION: Message WAFL_REMOTE_EVICT failed with code 12        <- ~1
 S3_AUTH_Dbg:   Root User: Skipping Group & Bucket Policy access checks    <- (tells you which S3 user the app uses)
 ```
 
-S3 accepts the request; the **storage layer (CSS/WAFL on the D-blade) refuses the object allocation with error 12**. `READ_OBJECT ... error 2` is plain "not found" and corresponds to the 404s.
+S3 accepts the request; the **storage layer (CSS/WAFL on the D-blade) refuses the object allocation with error 12**. Per NetApp support, 12 = **`RESULT_ERROR_GENERAL_BUFFER_TOO_SMALL`**; it is not errno 12 / ENOMEM, so don't read it as "out of memory". `READ_OBJECT ... error 2` is plain "not found" and corresponds to the 404s.
 
 ### 2. Check FabricLink — the link between a SnapMirror S3 source bucket and its destination
 
@@ -85,10 +85,15 @@ Seen in this case:
 ### Closest NetApp KB
 [S3 Bucket Access Fails with "ServiceUnavailable: Reduce your request rate"](https://kb.netapp.com/on-prem/ontap/da/S3/S3-KBs/S3_Bucket_Access_Fails_with_%E2%80%9CServiceUnavailable%3A_Reduce_your_request_rate%E2%80%9D) (ONTAP 9, S3, SnapMirror). It has the same sktrace family (`S3_CMD_Err: handleListObjectsResponse CSS error:12`) plus `mgwd.log` `fabriclink: replay_link_changes_to_dblade: create_link failed`. The KB's trigger is a broken/promoted SnapMirror S3. Here the relationship was never broken, but stale FabricLink object-store configs exist. The full cause and fix are behind NetApp sign-in.
 
+## What was tried
+- **Deleting the two stale object-store configs** (not referenced by any relationship): **no effect on the 503**. PUTs were still 100% 503 hours later, and the `mgwd.log` null-UUID `ERR: fabriclink` lines continued. The one visible change: the source relationship went from `Healthy: false` to `Healthy: true`. So the stale configs were real debris, but not the cause. The null-UUID FabricLink entry is internal and not visible through normal CLI.
+- **Bucket history matters:** the affected bucket was created by a multi-step S3→S3→S3 migration. Each step **broke and promoted a SnapMirror S3 destination**, which is the trigger described in the matching KB.
+
 ## Fix
-**Not confirmed yet.** Do **not** delete object-store configs or break the SnapMirror S3 relationship on your own. Open a case with the sktrace signature, the object-store config list, and the `mgwd.log` fabriclink errors, and let NetApp confirm which configs are stale and what the FabricLink repair procedure is. Record the confirmed fix here.
+**Not confirmed yet.** The KB's documented workaround is a **node reboot** (in an HA pair: takeover/giveback of each node in turn). NetApp is reviewing it with Escalation, along with whether a FabricLink repair is needed instead. Do not break the SnapMirror S3 relationship or reboot nodes without NetApp's confirmed procedure. Record the confirmed fix here.
 
 ## Prevention (independent of the final root cause)
+- Prefer **not** to build a production bucket from a broken-and-promoted SnapMirror S3 destination (migration by mirror-then-promote). If you must, verify afterwards that `mgwd.log` has no `ERR: fabriclink` lines before going live.
 - After a SnapMirror S3 **test**, remove its relationship **and** its `snapmirror object-store config` entries. Deleting the relationship alone leaves the configs behind.
 - Keep the root S3 user's keys stable on protected SVMs, and don't leave configs that reference rotated or deleted keys.
 - Periodically compare `snapmirror object-store config show` against `snapmirror show` for every S3 SVM. More configs than relationships is a red flag.
