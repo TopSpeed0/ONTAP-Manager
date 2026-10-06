@@ -14,7 +14,7 @@ Unhealthy Reason: -   Lag Time: -        (every transfer field is "-")
 
 - No EMS event, no unhealthy reason, no transfer error.
 - From the **intercluster** LIFs, the destination S3 data LIF does not answer a ping, while the intercluster gateway does. A ping from the cluster-management LIF still succeeds, through its own default route, which hides the problem.
-- Optional, unconfirmed side effect: about 9 days after replication stopped, every PutObject / CopyObject / tagging call on the source bucket started returning **503 "Reduce your request rate"**, while GET, LIST and DELETE kept working. See [Open question](#open-question-source-put-503).
+- Not a side effect, despite the timing: about 9 days after replication stopped, every PutObject on the source bucket started returning **503 "Reduce your request rate"**. Restoring replication did **not** fix it, so it's a separate issue. See [Open question](#open-question-source-put-503).
 
 ## Environment
 - ONTAP 9.16.1P5, SnapMirror S3 with the `Continuous` policy, cluster to cluster. NetApp support confirmed the same path is used same-cluster (case from the original setup).
@@ -73,7 +73,7 @@ Firewall prerequisites, from the original setup case: TCP 22, 443, 9443, 11104 a
 - Before adding a firewall rule for a new client subnet, check whether any admin-SVM route already covers that subnet through a non-management gateway.
 
 ## Open question: source PUT 503
-The source bucket rejected every PutObject (and initiate-multipart) with 503 in under 1 ms, starting 9 days after replication stopped. GET, LIST and DELETE kept working. Ruled out: FlexGroup inode limit (~9% used), space, snapshots, QoS, config changes, and the ONTAP 9.8 multipart KB. `wafl.zombie.susp.vol.limit` throttling after a mass delete was real, but it stopped while the 503s continued. **The replication backlog (about 63K objects / 1.2 TB) is the leading suspect, but this is unproven.** Re-test PUTs once the destination has caught up before you conclude either way.
+The source bucket rejected every PutObject (and initiate-multipart) with 503 in under 1 ms, starting 9 days after replication stopped. GET, LIST and DELETE kept working. Ruled out: FlexGroup inode limit (~9% used), space, snapshots, QoS, config changes, and the ONTAP 9.8 multipart KB. `wafl.zombie.susp.vol.limit` throttling after a mass delete was real, but it stopped while the 503s continued. **Resolved as a separate issue:** after the route fix the destination fully caught up, and the 503s were unchanged two days later, so the replication backlog was **not** the cause. Continued in [s3-put-503-css-error-12-stale-fabriclink.md](s3-put-503-css-error-12-stale-fabriclink.md) (S3 sktrace shows CSS error 12; stale FabricLink object-store configs are the lead).
 
 ## Related
 - NetApp KB: *Why do I always see S3 SnapMirror in transferring status with object counts* (Transferring is expected; objects wait in the queue until the RPO is met)

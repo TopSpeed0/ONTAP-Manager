@@ -266,3 +266,26 @@ A rejection in **under 1 ms** (`put_object_process_time_histogram` all in `<600u
 | `network interface show -service-policy default-intercluster` on a cluster with custom policies | no entries | List all admin-SVM LIFs; intercluster LIFs may use `custom-system-*` policies |
 
 When a script flags failures by matching `Error:` in output, note that `snapmirror show -instance` contains the field labels `Transfer Error:` and `Last Transfer Error:`. Match `^Error:` or `is not a recognized`/`invalid argument` instead.
+
+## 18. sktrace via the SPI — rotates in seconds, baseline is Err+Warn, times are New York
+
+When NetApp asks for an S3 (or any) `debug sktrace` capture:
+
+- **Baseline is not "all off".** For S3, S3_CMD, S3_PCP and S3_AUTH the default is `Err` and `Warn` **enabled**. The usual "disable" instruction (`-level * -enabled false`) leaves error tracing off afterwards. Save `debug sktrace tracepoint show -node <n>` first, and re-enable `Err`/`Warn` when you're done.
+- **`sktrace.log` can rotate every 6–15 seconds** on a busy node: ~110–128 MB files, flooded in the measured case by `WAFLREMOTE_EXCEPTION ... WRC_EVICT_MESSAGE_FAIL status=12`, ~145K lines/s. By the time you fetch `sktrace.log`, your trace window is already in the rotated files `sktrace.log.NNNNNNNNNN`, and those get overwritten within minutes. Download them **immediately and in parallel**.
+- **The SPI directory listing shows times in `America/New_York`**, not cluster time. Convert the trace window before choosing files. A file's timestamp is when it was **closed**, so it covers from the previous file's timestamp up to its own.
+- Trace tags are **mixed case**: `S3_Info`, `S3_CMD_Err`, `S3_AUTH_Dbg`, `CSS_EXCEPTION`. A filter like `S3[A-Z_]*` misses most of them. Use `\]\s+((?:S3|CSS)[A-Za-z0-9_]*):`.
+- 2.4 GB of raw sktrace zipped to 116 MB (`tar.exe -a -c -f x.zip ...` on Windows). Upload through NetApp's authenticated file upload page, using the case number. Attach a small S3/CSS-only extract to the email as well.
+
+```powershell
+# list + pull rotated files overlapping a window (SPI, Basic auth, PS7)
+$idx = (Invoke-WebRequest "https://<cluster_mgmt>/spi/<node>/etc/log/mlog/" -Credential $c -Authentication Basic -SkipCertificateCheck).Content
+# parse "sktrace.log.NNNNNNNNNN  <Day Mon d HH:mm:ss> America/New_York <yyyy> <size>"; keep files whose span overlaps the window
+# then Start-ThreadJob per file -> Invoke-WebRequest -OutFile
+```
+
+## 19. `mgwd.log` via the SPI — FabricLink (SnapMirror S3) errors never reach EMS as errors
+
+SnapMirror S3 / FabricLink problems show up in `/etc/log/mlog/mgwd.log` as `ERR: fabriclink: ...` lines. In EMS they appear at most as `fabriclink.retry.delay` (NOTICE, hidden by default). On ~25 MB/node `mgwd.log` covers about a day. Grep for `fabriclink` **and** `ERR:|fail|create_link`; the rest is DEBUG noise.
+
+Example of a failure line worth reporting: `ERR: fabriclink: get_endpoint_types ... Fabriclink ep-type check failed with error: Failed to get information for object store "00000000-0000-0000-0000-000000000000"`. A null object-store UUID points at a FabricLink row with no valid object-store config. Compare `snapmirror object-store config show` with `snapmirror show` (see [KnownIssues/s3-put-503-css-error-12-stale-fabriclink.md](../../../../KnownIssues/s3-put-503-css-error-12-stale-fabriclink.md)).
