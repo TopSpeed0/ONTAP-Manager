@@ -43,7 +43,8 @@ network interface show -vserver <admin_svm> -service-policy default-intercluster
 network ping -vserver <admin_svm> -lif <ic_lif> -destination <dst_s3_lif_ip>
 network route show -vserver <admin_svm>
 
-# 4. When did it stop? The audit log keeps months; EMS keeps ~12 h
+# 4. When did it stop? The audit log keeps months; `event log show` ~12 h (full EMS history: SPI /etc/log/ems.log.*, weeks).
+#    The EMS files show the outage directly: fabriclink.retry.delay "store is inaccessible" starts at the route change and stops at the fix.
 security audit log show -input *route*create*|*route*delete* -fields timestamp,username,input,state
 ```
 

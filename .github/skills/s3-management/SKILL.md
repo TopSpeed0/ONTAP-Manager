@@ -276,7 +276,7 @@ curl -k -u '<username>:<password>' -X DELETE "$BASE/groups/$GRP_ID"
 # The route that keeps it alive (one per remote S3 LIF, on each side)
 <cluster-ssh> -Command "network route create -vserver <admin_svm> -destination <remote_s3_lif_ip>/32 -gateway <ic_gateway> -metric 5"
 
-# Who touched routing, and when (audit log keeps months; EMS ~12 h)
+# Who touched routing, and when (audit log keeps months; `event log show` ~12 h, but SPI /etc/log/ems.log.* keeps weeks)
 <cluster-ssh> -Command "security audit log show -input *route*create*|*route*delete* -fields timestamp,username,input,state"
 ```
 

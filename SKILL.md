@@ -104,7 +104,7 @@ Schema: see `config.template.json` (tracked). First run auto-copies template to 
 
 - `KnownIssues/` (tracked) — sanitized, generic case articles. **Search first.**
 - `.github/Netapp Cases/` (gitignored) — raw personal case summaries with real hostnames/IPs. Search when KnownIssues has no match.
-- `.github/skills/ontap-cluster-info/references/ontap-observability-gotchas.md` — **read before promising historical evidence.** Measured REST metric retention windows, EMS retention, and the traps that waste the most time (deprecated `v3-tcp-max-*` values, FlexClone move splits, QoS `Is Shared`, latency-component breakdown).
+- `.github/skills/ontap-cluster-info/references/ontap-observability-gotchas.md` — **read before promising historical evidence.** Measured REST metric retention windows, EMS retention (API ~12 h vs SPI log files ~weeks), and the traps that waste the most time (deprecated `v3-tcp-max-*` values, FlexClone move splits, QoS `Is Shared`, latency-component breakdown).
 - `PDF/` — official ONTAP 9 documentation
 
 ## Other components

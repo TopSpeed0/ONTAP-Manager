@@ -38,17 +38,30 @@ If you need "how full was this volume on date X", the only source is **AIQUM** (
 
 Also: **`/api/svm/svms/{uuid}/metrics` does not exist** — returns `"API not found", code 3`. Aggregate per-SVM figures from the member volumes, or use aggregate-level metrics.
 
-## 3. EMS retention is hours, not days
+## 3. EMS: the query APIs keep hours, the node log files keep weeks
 
-`/api/support/ems/events` was measured retaining only **~11–14 hours**. For any incident older than half a day the EMS record is already gone.
+`/api/support/ems/events` and `event log show` only see an in-memory window: measured at **~11–14 hours** (about 4,096 entries per node at all severities). An incident older than half a day is gone **from those interfaces**, but not from the node.
 
 ```powershell
-# oldest/newest retained, cheaply
+# oldest/newest retained by the API, cheaply
 $o = Invoke-RestMethod -Uri "$base/support/ems/events?fields=time&max_records=1&order_by=time%20asc"  -Headers $h -SkipCertificateCheck
 $n = Invoke-RestMethod -Uri "$base/support/ems/events?fields=time&max_records=1&order_by=time%20desc" -Headers $h -SkipCertificateCheck
 ```
 
-Export EMS within 12 hours of an event, or rely on AutoSupport / AIQUM. Do not promise EMS evidence for a multi-day-old incident before checking the window.
+**The full EMS history is in each node's log files, readable through the SPI**, with no diag or systemshell needed:
+
+```
+https://<cluster_mgmt>/spi/<node>/etc/log/             # directory listing
+  ems                      current file
+  ems.log.NNNNNNNNNN       rotated weekly — measured back ~2 months (early Aug → early Oct)
+```
+
+- Format: one record per event, `<LR d="13Sep2026 00:20:08" n="<node>" ...>` followed by an event tag with underscores instead of dots (`<fabriclink_retry_delay_1 linkid="8" objstore="..." error="..."/>`), then `</LR>`. Parse the `d=` timestamp plus the tag name, and you get per-day counts for any event.
+- The `d=` timestamps are **node local time** (unlike the SPI directory listing, which shows America/New_York; see gotcha 18).
+- All severities are included (NOTICE/INFORMATIONAL too), so nothing is hidden by the `event log show` default filter (gotcha 14).
+- This answered a support question ("any `fabriclink.retry.delay` since date X?") three days after the fact. `event log show` alone could not have.
+
+Rule: for anything older than ~12 h, pull `ems.log.*` from the SPI before saying the EMS evidence is gone. AutoSupport and AIQUM remain the alternatives.
 
 Useful event to know: `nblade.execsOverLimit` fires when a client exceeds the **128 in-flight request** ceiling to a given LIF — a real signature of client-side NFS concurrency saturation.
 
@@ -222,13 +235,13 @@ event log show -severity * -time >"10/04/2026 00:00:00" -fields time,node,severi
 event log show -severity * -message-name wafl.zombie.susp.vol.limit
 ```
 
-- The retained window was **4,096 entries ≈ 12.5 h** at all severities. Same conclusion as gotcha 3: export immediately, or trigger an AutoSupport.
+- The `event log show` window was **4,096 entries ≈ 12.5 h** at all severities. For older events, use the node EMS log files from the SPI (gotcha 3), which keep weeks.
 - Range syntax is `-time "MM/DD/YYYY HH:MM:SS".."MM/DD/YYYY HH:MM:SS"`, with **no spaces around `..`**. With spaces, it fails with "Must have values on either side of '..'".
 - `-message-name a*|b*` patterns combined with `-severity *` sometimes return nothing. Dump the window to a file and grep it locally instead.
 
-## 15. The audit log is the change history — it keeps months, EMS keeps hours
+## 15. The audit log is the change history — it keeps months
 
-`security audit log show` retained **two months** (from early August to October) on the same cluster where EMS kept 12 hours. It records CLI (ssh), REST/System Manager (http, including the request body), ONTAPI and SNMP. For "what changed before it broke", use the audit log, not EMS.
+`security audit log show` retained **two months** (from early August to October) on the same cluster where `event log show` kept 12 hours. EMS *events* are also kept for weeks in the node log files (gotcha 3), but EMS records what happened, not who changed what. It records CLI (ssh), REST/System Manager (http, including the request body), ONTAPI and SNMP. For "what changed before it broke", use the audit log, not EMS.
 
 ```
 security audit log show -input *route*create*|*route*delete* -fields timestamp,node,application,username,input,state

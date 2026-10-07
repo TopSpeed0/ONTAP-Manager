@@ -239,7 +239,7 @@ After a disaster is resolved and you want to reactivate the original source:
 | *"Unable to generate baseline for table sis"* | Orphaned destination volumes that no longer map to a source volume (often carry an MSID numeric suffix, e.g. `<vol><msid>`) | Full verified procedure: [KnownIssues — table sis](../../../KnownIssues/svmdr-resync-fails-unable-to-generate-baseline-table-sis.md). `snapmirror resync` names the offending volumes for you — you do **not** need the CRS mlog. |
 | *"operation status is Aborting / Transferring"* when trying to `break` | `snapmirror abort` does not stop the schedule; the next scheduled transfer starts within seconds | `snapmirror modify -destination-path <path> -schedule ""` first, then `quiesce`, then `break`. **Restore the schedule afterwards** or DR silently stops updating. |
 
-**Before promising historical evidence for an SVM-DR incident**, read [ONTAP observability gotchas](../ontap-cluster-info/references/ontap-observability-gotchas.md) — EMS retains only ~11–14 hours and REST metrics reach back 30 days at best.
+**Before promising historical evidence for an SVM-DR incident**, read [ONTAP observability gotchas](../ontap-cluster-info/references/ontap-observability-gotchas.md) — `event log show` / the EMS API retain only ~11–14 hours (the node EMS log files on the SPI keep weeks), and REST metrics reach back 30 days at best.
 
 ## Real-World Example: <svm-name> (<cluster-name> → <cluster-name>)
 
